@@ -1,4 +1,4 @@
-# ChatGPT Proxy Launcher
+# Codex Proxy Launch Deck
 
 <p align="center"><strong>English</strong> | <a href="README.zh-CN.md">简体中文</a></p>
 
@@ -9,67 +9,96 @@
   <a href="LICENSE"><img src="https://img.shields.io/github/license/gaopengbin/chatgpt-proxy-launcher" alt="MIT license"></a>
 </p>
 
-## Are you experiencing any of these problems?
+Launch Codex through a process-scoped HTTP proxy without changing the Windows
+system proxy, then discover and apply CodeDrobe themes from the same desktop
+application.
 
-- **Codex repeatedly shows `Reconnecting... 1/5` through `5/5`**, making every response slow to start.
-- **ChatGPT/Codex Desktop is unstable unless global proxy mode is enabled**, but you do not want every Windows application routed through the proxy.
-- **Your phone cannot connect to a Codex session running on Windows**, remaining stuck while looking or waiting for the desktop.
+## Why
 
-**ChatGPT Proxy Launcher was built for these three problems.** It applies a local HTTP proxy only to the ChatGPT/Codex process and its children, without changing the Windows global proxy. This launch method has been tested on Windows and allowed a phone to connect to a desktop Codex session that was previously unreachable.
+- Avoid repeated `Reconnecting... 1/5` to `5/5` delays when Codex needs an
+  explicit proxy route on Windows.
+- Keep proxy settings isolated to Codex and its child processes.
+- Make Codex themes discoverable, installable, reversible, and available
+  without hand-written commands.
+- Keep a lightweight legacy launcher available for users who only need proxy
+  startup.
 
-<p align="center">
-  <img src="assets/app-icon.png" width="128" height="128" alt="ChatGPT Proxy Launcher icon">
-</p>
+## Launch Deck features
 
-A tiny Windows utility that checks a local HTTP proxy and launches ChatGPT/Codex Desktop with process-scoped proxy environment variables. The executable is under 100 KB and does not require administrator privileges.
-
-> The verified mobile connection result applies when the desktop remote-control process lacks a usable proxy route. Account mismatch, LAN restrictions, firewalls, TLS inspection, and service-side incidents require separate diagnosis.
-
-## Related upstream reports
-
-The launcher targets symptoms also reported in the official `openai/codex` repository:
-
-- [Windows WebSocket transport ignores the system proxy but works with `HTTP_PROXY` / `HTTPS_PROXY`](https://github.com/openai/codex/issues/29958)
-- [Windows mobile remote control requires proxy environment variables](https://github.com/openai/codex/issues/29233)
-- [WebSocket failures exhaust all `Reconnecting... 1/5–5/5` retries before HTTP fallback](https://github.com/openai/codex/issues/19821)
-- [Windows Codex is unstable with SOCKS5 but recovers with an explicit HTTP proxy](https://github.com/openai/codex/issues/20844)
-
-## Features
-
-- Automatically discovers the `OpenAI.Codex` or `OpenAI.ChatGPT-Desktop` Microsoft Store/MSIX package
-- Starts the current `ChatGPT.exe` entry point and remains compatible with the older `Codex.exe`
-- Checks the proxy port and detects an already-running ChatGPT instance before launch
-- Switches the complete application interface between English and Simplified Chinese
-- Sets uppercase and lowercase forms of `HTTP_PROXY`, `HTTPS_PROXY`, and `NO_PROXY`
-- Does not modify the Windows system proxy and does not require administrator privileges
+- Bold frameless desktop interface with working native drag, minimize, maximize,
+  and close controls
+- Automatic discovery of Microsoft Store/MSIX Codex installations
+- Proxy connectivity check and accurate Codex process detection
+- CodeDrobe marketplace browsing, search, sorting, installation, and local cache
+- Bundled `Hatsune Miku · Future Beats` theme for offline use
+- Live theme application to a running Codex window
+- Managed theme watcher for renderer reloads
+- Adaptive loopback CDP port selection to avoid stale `9335` conflicts
+- Native appearance restoration
+- English and Simplified Chinese interface
 
 ## Download
 
-Download `ChatGPTProxyLauncher.exe` directly from the latest [GitHub Release](https://github.com/gaopengbin/chatgpt-proxy-launcher/releases/latest). The ZIP asset additionally includes this README, the license, and a desktop-shortcut helper.
+Download the recommended NSIS installer from the latest
+[GitHub Release](https://github.com/gaopengbin/chatgpt-proxy-launcher/releases/latest):
+
+- `Codex Proxy Launch Deck_*_x64-setup.exe`: recommended installer
+- `Codex Proxy Launch Deck_*_x64_en-US.msi`: MSI installer
+- `ChatGPTProxyLauncher.exe`: legacy lightweight launcher
+- `ChatGPTProxyLauncher-Legacy-win-x64.zip`: legacy launcher with the bundled
+  theme and shortcut helper
+
+The public binaries are currently unsigned, so Windows SmartScreen may display
+a warning.
 
 ## Usage
 
-1. Fully quit any running ChatGPT instance.
-2. Start your local HTTP proxy.
-3. Enter its host and HTTP or mixed port, then select **Launch ChatGPT through proxy**.
+1. Start the HTTP or mixed port of your local proxy.
+2. Open Launch Deck and enter the proxy host and port.
+3. Select a theme, or leave theme mode disabled.
+4. Select **Launch Codex**.
 
-To create a desktop shortcut, right-click `Create-Desktop-Shortcut.ps1` from the extracted ZIP and select **Run with PowerShell**. The shortcut automatically uses the application icon.
+Launch Deck sets uppercase and lowercase forms of `HTTP_PROXY`, `HTTPS_PROXY`,
+and `NO_PROXY` only for the launched process tree. It never changes the Windows
+system proxy.
 
-> If your proxy software exposes a SOCKS port, use its HTTP or mixed port instead. The launcher currently supplies an HTTP proxy URL.
+Theme features require [CodeDrobe](https://codedrobe.app). Launch Deck uses a
+stable global `codedrobe` command when available and can fall back to `npx`.
+
+> If your proxy application exposes a SOCKS port, use its HTTP or mixed port.
+> This launcher supplies an HTTP proxy URL.
 
 ## Build
 
-The lightweight build uses the .NET Framework C# compiler included with Windows:
+Build the recommended Tauri application:
+
+```powershell
+cd desktop
+npm ci
+npm run tauri build
+```
+
+Build the legacy .NET Framework launcher:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\build.ps1
 ```
 
-The result is written to `output/ChatGPTProxyLauncher.exe` and is approximately 90 KB including the multi-size application icon.
+See [desktop/README.md](desktop/README.md) for development checks and desktop
+requirements.
+
+## Related upstream reports
+
+- [Windows WebSocket transport works with explicit proxy environment variables](https://github.com/openai/codex/issues/29958)
+- [Windows mobile remote control requires proxy environment variables](https://github.com/openai/codex/issues/29233)
+- [WebSocket failures exhaust retries before HTTP fallback](https://github.com/openai/codex/issues/19821)
+- [Windows Codex recovers with an explicit HTTP proxy](https://github.com/openai/codex/issues/20844)
 
 ## Privacy and security
 
-The launcher does not forward or inspect network traffic. It checks whether the specified port accepts a connection and passes proxy environment variables to the newly started ChatGPT process. Public binaries should ideally be code-signed to reduce Windows SmartScreen warnings.
+The launcher does not forward or inspect network traffic. It only checks whether
+the configured proxy endpoint accepts a connection and passes proxy environment
+variables to the new Codex process.
 
 ## License
 

@@ -1,4 +1,4 @@
-# ChatGPT Proxy Launcher
+# Codex Proxy Launch Deck
 
 <p align="center"><a href="README.md">English</a> | <strong>简体中文</strong></p>
 
@@ -9,65 +9,85 @@
   <a href="LICENSE"><img src="https://img.shields.io/github/license/gaopengbin/chatgpt-proxy-launcher" alt="MIT 许可证"></a>
 </p>
 
-## 你是不是遇到了这些问题？
+只让 Codex 通过进程级 HTTP 代理启动，不修改 Windows 系统代理；同时在一个桌面应用中浏览、安装和应用 CodeDrobe 主题。
 
-- **Codex 一直 `Reconnecting... 1/5` 到 `5/5`**，要等很久才开始回复。
-- **不开全局代理，ChatGPT/Codex Desktop 就无法稳定连接**；但又不想让所有 Windows 程序都走代理。
-- **手机无法连接 Windows 上的桌面 Codex 会话**，一直找不到桌面端或停在等待连接。
+## 为什么做它
 
-**ChatGPT Proxy Launcher 就是为这三个问题做的。** 它只给本次启动的 ChatGPT/Codex 及其子进程设置代理，不修改 Windows 全局代理。已在 Windows 上实测，通过这种方式启动后，手机可以连接此前无法连接的桌面 Codex 会话。
+- 解决 Windows 上 Codex 因缺少显式代理而反复出现
+  `Reconnecting... 1/5` 到 `5/5` 的问题。
+- 只代理 Codex 及其子进程，不影响其他 Windows 应用。
+- 让 Codex 主题可以发现、安装、恢复，不再依赖手写命令。
+- 继续提供轻量旧版，满足只需要代理启动的用户。
 
-<p align="center">
-  <img src="assets/app-icon.png" width="128" height="128" alt="ChatGPT Proxy Launcher icon">
-</p>
+## Launch Deck 特性
 
-一个轻量的 Windows 小工具：检查本地 HTTP 代理，并在仅影响当前应用的环境变量中启动 ChatGPT/Codex Desktop。单文件不到 100 KB，无需管理员权限。
+- 自绘无边框界面，支持窗口拖动、最小化、最大化和关闭
+- 自动发现 Microsoft Store/MSIX 安装的 Codex
+- 代理连通性检测和准确的 Codex 进程识别
+- CodeDrobe 主题商店浏览、搜索、排序、安装与本地缓存
+- 离线内置“初音未来 · Future Beats”主题
+- Codex 运行中动态应用主题
+- 自动维护主题 watcher，应对渲染器刷新
+- 自适应选择本机 CDP 端口，避开残留的 `9335` 端口冲突
+- 一键恢复 Codex 原生外观
+- English / 简体中文界面
 
-> 上述手机连接结论针对“桌面端缺少可用代理出口”这一故障场景。如果故障来自账号不一致、局域网、防火墙、TLS 检查或服务端状态，则仍需单独排查。
+## 下载
 
-## 相关官方问题
+请从最新 [GitHub Release](https://github.com/gaopengbin/chatgpt-proxy-launcher/releases/latest)
+下载，推荐使用 NSIS 安装版：
 
-本工具针对的症状也出现在 `openai/codex` 官方仓库中：
+- `Codex Proxy Launch Deck_*_x64-setup.exe`：推荐安装包
+- `Codex Proxy Launch Deck_*_x64_en-US.msi`：MSI 安装包
+- `ChatGPTProxyLauncher.exe`：旧版轻量单文件
+- `ChatGPTProxyLauncher-Legacy-win-x64.zip`：含内置主题和快捷方式脚本的旧版
 
-- [Windows WebSocket 不使用系统代理，但设置 `HTTP_PROXY` / `HTTPS_PROXY` 后正常](https://github.com/openai/codex/issues/29958)
-- [Windows 手机远程控制需要代理环境变量](https://github.com/openai/codex/issues/29233)
-- [WebSocket 失败后经历完整的 `Reconnecting... 1/5–5/5` 才回退 HTTP](https://github.com/openai/codex/issues/19821)
-- [Windows Codex 使用 SOCKS5 不稳定，改为显式 HTTP 代理后恢复](https://github.com/openai/codex/issues/20844)
+目前公开二进制尚未代码签名，Windows SmartScreen 可能显示安全提示。
 
-## 特性
+## 使用
 
-- 自动发现 Microsoft Store/MSIX 安装的 `OpenAI.Codex` 或 `OpenAI.ChatGPT-Desktop` 包
-- 优先启动当前的 `ChatGPT.exe`，兼容旧版 `Codex.exe`
-- 启动前检查代理端口以及已经运行的 ChatGPT 实例
-- 应用界面支持 English / 简体中文完整切换
-- 同时设置大小写形式的 `HTTP_PROXY`、`HTTPS_PROXY` 和 `NO_PROXY`
-- 不修改 Windows 系统代理，不需要管理员权限
+1. 启动本地代理软件的 HTTP 或 mixed 端口。
+2. 打开 Launch Deck，填写代理主机和端口。
+3. 选择主题，或关闭主题模式。
+4. 点击“启动 Codex”。
+
+Launch Deck 只给新启动的进程树设置大小写形式的 `HTTP_PROXY`、
+`HTTPS_PROXY` 和 `NO_PROXY`，不会修改 Windows 系统代理。
+
+主题功能依赖 [CodeDrobe](https://codedrobe.app)。Launch Deck 会优先使用
+稳定的全局 `codedrobe` 命令，也可以回退到 `npx`。
+
+> 如果代理软件提供的是 SOCKS 端口，请改用它的 HTTP/mixed 端口；
+> 本工具传递的是 HTTP 代理 URL。
 
 ## 构建
 
-推荐构建轻量版（依赖 Windows 自带的 .NET Framework 4.x）：
+构建推荐的 Tauri 桌面版：
+
+```powershell
+cd desktop
+npm ci
+npm run tauri build
+```
+
+构建旧版 .NET Framework 轻量启动器：
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\build.ps1
 ```
 
-输出为 `output/ChatGPTProxyLauncher.exe`，当前约 70 KB（包含多尺寸应用图标）。构建使用 Windows 自带的 .NET Framework C# 编译器。
+开发环境与检查命令见 [desktop/README.md](desktop/README.md)。
 
-## 使用
+## 相关官方问题
 
-1. 先完全退出正在运行的 ChatGPT。
-2. 启动本地 HTTP 代理。
-3. 填写代理主机和端口，点击“启动 ChatGPT”。
-
-在 GitHub Release 中可以直接下载 `ChatGPTProxyLauncher.exe`；ZIP 版本额外包含 README、许可证和桌面快捷方式脚本。
-
-如需桌面快捷方式，请在解压目录中右键 `Create-Desktop-Shortcut.ps1`，选择“使用 PowerShell 运行”。快捷方式会自动使用应用图标。
-
-> 如果本地软件提供的是 SOCKS 端口，请改用其 HTTP/mixed 端口；本工具当前传递的是 HTTP 代理 URL。
+- [Windows WebSocket 设置显式代理环境变量后恢复](https://github.com/openai/codex/issues/29958)
+- [Windows 手机远程控制需要代理环境变量](https://github.com/openai/codex/issues/29233)
+- [WebSocket 失败后经历完整重试才回退 HTTP](https://github.com/openai/codex/issues/19821)
+- [Windows Codex 使用显式 HTTP 代理后恢复](https://github.com/openai/codex/issues/20844)
 
 ## 隐私与安全
 
-本工具不转发或读取网络流量。它只检查指定端口是否可连接，并把代理环境变量传给新启动的 ChatGPT 进程。发布给其他人前建议对二进制进行代码签名，以减少 Windows SmartScreen 警告。
+启动器不转发或读取网络流量，只检查指定代理端点是否可连接，并把代理环境变量传给新启动的 Codex 进程。
 
 ## 许可证
 
