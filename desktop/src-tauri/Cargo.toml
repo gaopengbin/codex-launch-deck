@@ -4,7 +4,7 @@ version = "2.1.1"
 description = "Launch Codex through a local proxy and apply CodeDrobe themes."
 authors = ["GeoD"]
 license = "MIT"
-repository = "https://github.com/gaopengbin/chatgpt-proxy-launcher"
+repository = "https://github.com/gaopengbin/codex-launch-deck"
 edition = "2021"
 rust-version = "1.77.2"
 

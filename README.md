@@ -1,151 +1,151 @@
-# Codex Proxy Launch Deck
-
-<p align="center"><strong>English</strong> | <a href="README.zh-CN.md">简体中文</a></p>
-
 <p align="center">
-  <a href="https://github.com/gaopengbin/chatgpt-proxy-launcher/releases/latest"><img src="https://img.shields.io/github/v/release/gaopengbin/chatgpt-proxy-launcher" alt="Latest release"></a>
-  <a href="https://github.com/gaopengbin/chatgpt-proxy-launcher/releases"><img src="https://img.shields.io/github/downloads/gaopengbin/chatgpt-proxy-launcher/total" alt="Total downloads"></a>
-  <img src="https://img.shields.io/badge/Windows-10%20%7C%2011-0078D4" alt="Windows 10 and 11">
-  <a href="LICENSE"><img src="https://img.shields.io/github/license/gaopengbin/chatgpt-proxy-launcher" alt="MIT license"></a>
+  <img src="docs/images/banner.png" alt="Codex Proxy Launch Deck - 一次启动，代理、主题与 AI 创作同时就绪" width="100%">
 </p>
 
-Launch Codex through a process-scoped HTTP proxy without changing the Windows
-system proxy, then discover and apply CodeDrobe themes from the same desktop
-application. Launch Deck can also ask your locally authenticated Codex CLI to
-create a custom theme from a written brief or reference image.
+<p align="center">
+  <strong>简体中文</strong> · <a href="README.en.md">English</a>
+</p>
 
-## Why
+<p align="center">
+  <a href="https://github.com/gaopengbin/codex-launch-deck/releases/latest"><img src="https://img.shields.io/github/v/release/gaopengbin/codex-launch-deck?style=flat-square&color=cfff32" alt="最新版本"></a>
+  <a href="https://github.com/gaopengbin/codex-launch-deck/releases"><img src="https://img.shields.io/github/downloads/gaopengbin/codex-launch-deck/total?style=flat-square&color=31c9b2" alt="累计下载"></a>
+  <img src="https://img.shields.io/badge/Windows-10%20%7C%2011-0b7668?style=flat-square" alt="Windows 10 / 11">
+  <a href="LICENSE"><img src="https://img.shields.io/github/license/gaopengbin/codex-launch-deck?style=flat-square&color=173d34" alt="MIT License"></a>
+</p>
 
-- Avoid repeated `Reconnecting... 1/5` to `5/5` delays when Codex needs an
-  explicit proxy route on Windows.
-- Keep proxy settings isolated to Codex and its child processes.
-- Make Codex themes discoverable, installable, reversible, and available
-  without hand-written commands.
-- Keep a lightweight legacy launcher available for users who only need proxy
-  startup.
+<p align="center">
+  <strong>Windows 上的 Codex 启动与主题工作台。</strong><br>
+  只代理本次启动的 Codex，不修改系统代理；浏览、安装、即时切换 CodeDrobe 主题，并复用本机已登录的 Codex 创作完整主题。
+</p>
 
-## Launch Deck features
+<p align="center">
+  <a href="https://github.com/gaopengbin/codex-launch-deck/releases/latest"><strong>下载 Windows 安装版</strong></a>
+  &nbsp;·&nbsp;
+  <a href="https://codedrobe.app">CodeDrobe 主题商店</a>
+  &nbsp;·&nbsp;
+  <a href="#快速开始">快速开始</a>
+</p>
 
-- Bold frameless desktop interface with working native drag, minimize, maximize,
-  and close controls
-- Automatic discovery of Microsoft Store/MSIX Codex installations
-- Proxy connectivity check and accurate Codex process detection
-- CodeDrobe marketplace browsing, search, sorting, installation, download
-  progress, integrity checking, and local cache
-- Bundled `Hatsune Miku · Future Beats` theme for offline use
-- Light/dark labels on theme cards and automatic synchronization of the native
-  Codex appearance mode required by the selected theme
-- Local Codex-powered custom theme generation with CSS-only, uploaded-reference,
-  and AI-background modes
-- Generated hero artwork, optional supporting textures, and theme-card covers
-- Live theme application to a running Codex window without restarting it
-- Managed theme watcher for renderer reloads
-- Adaptive loopback CDP port selection to avoid stale `9335` conflicts
-- Native appearance restoration and persistent watcher cleanup
-- Hidden background commands, so theme and process operations do not flash
-  console windows
-- English and Simplified Chinese interface
+<p align="center">
+  <img src="docs/images/theme-gallery.png" alt="Codex Proxy Launch Deck 主题商店" width="92%">
+</p>
 
-## What's new in 2.1
+## 它解决什么
 
-- Create and cache complete `.codedrobe-theme` packages through the signed-in
-  Codex CLI without configuring another model provider or API key.
-- Use a local image as a visual reference; the generation workflow preserves
-  important composition anchors instead of treating the file as a raw overlay.
-- Choose the intended light or dark Codex base before generation. Theme cards
-  display that requirement, and applying the theme switches Codex through its
-  native appearance action.
-- Follow generation and marketplace-download progress inside Launch Deck, with
-  clearer failures and no native HTML number spinner in the proxy-port control.
+<table>
+  <tr>
+    <td width="33%" valign="top">
+      <strong>01 · 进程级代理</strong><br><br>
+      将 <code>HTTP_PROXY</code>、<code>HTTPS_PROXY</code> 和 <code>NO_PROXY</code> 只传递给 Codex 进程树，避免影响其他 Windows 应用，也不改系统代理。
+    </td>
+    <td width="33%" valign="top">
+      <strong>02 · 主题商店与即时换肤</strong><br><br>
+      搜索、安装和管理 CodeDrobe 主题。Codex 已经运行时也能直接切换，并由 watcher 在渲染器刷新后自动恢复主题。
+    </td>
+    <td width="33%" valign="top">
+      <strong>03 · 本地 Codex AI 创作</strong><br><br>
+      复用电脑上已登录的 Codex CLI，根据文字或参考图生成 <code>.codedrobe-theme</code>，无需额外配置模型供应商或 API Key。
+    </td>
+  </tr>
+</table>
 
-## Download
+## 核心亮点
 
-Download the recommended NSIS installer from the latest
-[GitHub Release](https://github.com/gaopengbin/chatgpt-proxy-launcher/releases/latest):
+- **一次启动，同时就绪**：代理连通性检测、Codex 启动、主题校验与应用合并为一条链路。
+- **不污染系统网络设置**：代理环境变量仅作用于本次启动的 Codex 及其子进程。
+- **运行中即时切换主题**：无需重启 Codex，自动同步主题要求的原生浅色/深色外观。
+- **完整组件覆盖**：主题覆盖主界面、右侧输出/来源面板、Tooltip、Popover、Dropdown、Menu、Listbox 与 Dialog。
+- **真实主题商店**：支持搜索、排序、下载进度、完整性校验、本地缓存与离线内置主题。
+- **AI 主题生成闭环**：支持纯 CSS、上传参考图、AI 背景三种模式，自动校验、打包并加入本地主题库。
+- **可靠的运行状态识别**：准确区分残留端口、Codex 主进程和渲染器状态，减少“未启动却被判定为运行中”。
+- **随时可恢复**：一键恢复 Codex 原生外观，同时清理持久化主题 watcher。
 
-- `Codex Proxy Launch Deck_*_x64-setup.exe`: recommended installer
-- `Codex Proxy Launch Deck_*_x64_en-US.msi`: MSI installer
-- `ChatGPTProxyLauncher.exe`: legacy lightweight launcher
-- `ChatGPTProxyLauncher-Legacy-win-x64.zip`: legacy launcher with the bundled
-  theme and shortcut helper
+## 界面与效果
 
-The public binaries are currently unsigned, so Windows SmartScreen may display
-a warning.
+<table>
+  <tr>
+    <td width="50%" align="center"><strong>复用本地 Codex 创作主题</strong></td>
+    <td width="50%" align="center"><strong>主题实际应用到 Codex</strong></td>
+  </tr>
+  <tr>
+    <td><img src="docs/images/ai-theme-creation.png" alt="AI 主题创作流程"></td>
+    <td><img src="docs/images/theme-applied-codex.png" alt="主题应用后的 Codex 界面"></td>
+  </tr>
+</table>
 
-## Usage
+## v2.1.1 更新
 
-1. Start the HTTP or mixed port of your local proxy.
-2. Open Launch Deck and enter the proxy host and port.
-3. Select a theme, or leave theme mode disabled.
-4. Select **Launch Codex**.
+- AI 主题生成器新增完整组件覆盖契约，避免右侧面板和悬浮层保留系统灰色。
+- 自动覆盖 Tooltip、Popover、菜单、下拉列表、对话框及其 hover/highlighted 状态。
+- 修复 Microsoft Store 内置 CLI 无法由外部程序执行的问题，自动寻找可用的 Codex CLI。
+- AI 创作任务继承启动器代理配置，代理环境下不再因 CLI 拒绝访问而失败。
+- Codex 刚启动、DOM 尚未稳定时自动等待并重试主题应用。
 
-If Codex is already running with a CDP port, select **Apply theme live** instead.
-Launch Deck reads the theme's declared light/dark base and synchronizes the
-running Codex window automatically. Restoring the native appearance returns the
-managed Codex settings and removes the injected theme.
+## 快速开始
 
-Launch Deck sets uppercase and lowercase forms of `HTTP_PROXY`, `HTTPS_PROXY`,
-and `NO_PROXY` only for the launched process tree. It never changes the Windows
-system proxy.
+1. 在本地代理软件中开启 **HTTP** 或 **Mixed** 端口。
+2. 从 [最新 Release](https://github.com/gaopengbin/codex-launch-deck/releases/latest) 安装并打开 Launch Deck。
+3. 填写代理主机和端口，点击检测。
+4. 选择主题，点击 **启动 Codex**；如果 Codex 已通过 CDP 运行，可直接点击 **即时应用主题**。
 
-Theme features require [CodeDrobe](https://codedrobe.app). Launch Deck uses a
-stable global `codedrobe` command when available and can fall back to `npx`.
+> 如果代理软件提供的是 SOCKS 端口，请改用它的 HTTP/Mixed 端口。Launch Deck 传递的是 HTTP 代理 URL。
 
-> If your proxy application exposes a SOCKS port, use its HTTP or mixed port.
-> This launcher supplies an HTTP proxy URL.
+## 下载选择
 
-## Create a custom theme with Codex
+| 文件 | 适合场景 |
+| --- | --- |
+| `Codex.Proxy.Launch.Deck_*_x64-setup.exe` | 推荐，大多数 Windows 用户使用的 NSIS 安装包 |
+| `Codex.Proxy.Launch.Deck_*_x64_en-US.msi` | 适合 MSI 部署与企业安装环境 |
+| `ChatGPTProxyLauncher.exe` | 只需要代理启动能力的旧版轻量单文件 |
+| `ChatGPTProxyLauncher-Legacy-win-x64.zip` | 旧版启动器、内置主题与快捷方式脚本合集 |
 
-This workflow reuses the Codex CLI already installed and signed in on the
-computer. It does not require a separate API key or an embedded model service.
+公开二进制目前尚未进行代码签名，Windows SmartScreen 可能显示安全提示。请始终从本仓库 Release 页面下载。
 
-1. Open **AI custom theme** in Launch Deck.
-2. Enter a visual brief and choose the required **Light** or **Dark** base.
-3. Choose one visual mode:
-   - **CSS only** for gradients, glass, borders, shadows, and motion without a
-     bitmap background.
-   - **Upload reference** to generate a coordinated theme and artwork from a
-     local image.
-   - **AI background** to let Codex create the hero artwork from the brief.
-4. Start generation and follow the staged progress. Launch Deck validates the
-   package, generates or hydrates its card cover, and adds it to the local theme
-   library when complete.
+## AI 主题创作
 
-The CodeDrobe theme skill is required for authoring. Launch Deck detects the
-skill and can install it for the current user. Generated packages are stored in
-`%LOCALAPPDATA%\CodexProxyLaunchDeck\themes` and can be applied like marketplace
-themes.
+1. 打开侧栏 **AI 创作**。
+2. 输入视觉描述，选择主题需要的 **浅色** 或 **深色** Codex 基底。
+3. 选择视觉模式：**纯 CSS**、**上传参考图** 或 **AI 生成图**。
+4. 启动创作并查看实时进度。完成后 Launch Deck 会校验主题结构、组件覆盖、背景素材和卡片封面，然后自动加入本地主题库。
 
-## Using themes with Cockpit Tools
+生成的主题保存在：
 
-Launch Deck can apply or switch a theme for Codex started by
-[Cockpit Tools](https://github.com/jlcodes99/cockpit-tools). The Codex process
-must be started with a loopback Chromium DevTools port; otherwise CodeDrobe
-cannot attach to its renderer after it is already running.
+```text
+%LOCALAPPDATA%\CodexProxyLaunchDeck\themes
+```
 
-1. In Cockpit Tools, open **Codex** and select **Application Instances**.
-2. Edit the **Default Instance**.
-3. In **Custom launch arguments**, enter:
+主题创作需要 CodeDrobe 主题 Skill。Launch Deck 会自动检测，并可为当前用户安装该能力。
 
-   ```text
-   --remote-debugging-port=9335
-   ```
+<details>
+<summary><strong>与 Cockpit Tools 配合使用</strong></summary>
 
-4. Save the instance, fully exit every Codex window/process, then launch the
-   default instance through Cockpit Tools.
-5. Open Launch Deck and select **Apply theme live** to apply or switch themes.
+如果 Codex 由 [Cockpit Tools](https://github.com/jlcodes99/cockpit-tools) 启动，需要在默认实例的 **自定义启动参数** 中加入：
 
-The selected theme's native light/dark base is synchronized automatically; you
-do not need to change Codex appearance settings by hand.
+```text
+--remote-debugging-port=9335
+```
 
-Do not put the argument in Cockpit Tools' **Settings > Codex startup path**:
-that field is only for the executable path. If port `9335` is already in use,
-choose a free port and use the same `--remote-debugging-port=<port>` form;
-Launch Deck detects the port from the launched Codex process.
+保存后完全退出所有 Codex 窗口和后台进程，再通过 Cockpit Tools 启动。Launch Deck 会从进程命令行自动识别 CDP 端口；如果 `9335` 被占用，可换成其他空闲端口。
 
-## Build
+请勿把参数填写到 **设置 > Codex 启动路径**，该字段只能填写可执行文件路径。
 
-Build the recommended Tauri application:
+</details>
+
+<details>
+<summary><strong>为什么显式代理能改善 Windows Codex 连接</strong></summary>
+
+- [Windows WebSocket transport works with explicit proxy environment variables](https://github.com/openai/codex/issues/29958)
+- [Windows mobile remote control requires proxy environment variables](https://github.com/openai/codex/issues/29233)
+- [WebSocket failures exhaust retries before HTTP fallback](https://github.com/openai/codex/issues/19821)
+- [Windows Codex recovers with an explicit HTTP proxy](https://github.com/openai/codex/issues/20844)
+
+</details>
+
+## 隐私与安全
+
+Launch Deck 不转发、不读取网络流量，只检查指定代理端点是否可连接，并将代理环境变量传递给新启动的 Codex 进程。AI 主题生成时，用户选择的参考图片只会交给明确启动的本地 Codex 任务；Launch Deck 不会将图片上传到自己的服务。
+
+## 本地构建
 
 ```powershell
 cd desktop
@@ -155,38 +155,18 @@ npm run build
 npm run tauri build
 ```
 
-Rust checks:
-
 ```powershell
 cd desktop\src-tauri
-cargo test
-cargo clippy --all-targets --all-features -- -D warnings
+cargo test --locked
+cargo clippy --locked --all-targets --all-features -- -D warnings
 ```
 
-Build the legacy .NET Framework launcher:
+构建旧版 .NET Framework 启动器：
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\build.ps1
 ```
 
-See [desktop/README.md](desktop/README.md) for development checks and desktop
-requirements.
-
-## Related upstream reports
-
-- [Windows WebSocket transport works with explicit proxy environment variables](https://github.com/openai/codex/issues/29958)
-- [Windows mobile remote control requires proxy environment variables](https://github.com/openai/codex/issues/29233)
-- [WebSocket failures exhaust retries before HTTP fallback](https://github.com/openai/codex/issues/19821)
-- [Windows Codex recovers with an explicit HTTP proxy](https://github.com/openai/codex/issues/20844)
-
-## Privacy and security
-
-The launcher does not forward or inspect network traffic. It only checks whether
-the configured proxy endpoint accepts a connection and passes proxy environment
-variables to the new Codex process. A reference image selected for AI theme
-generation is passed only to the explicitly started Codex generation job; Launch
-Deck does not upload it to its own service.
-
 ## License
 
-MIT
+[MIT](LICENSE)
