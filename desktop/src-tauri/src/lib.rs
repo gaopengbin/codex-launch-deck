@@ -127,6 +127,40 @@ struct ActionResult {
     warning: bool,
 }
 
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct CodeDrobeAuthStatus {
+    logged_in: bool,
+    base_url: String,
+    creator_handle: Option<String>,
+}
+
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ThemePublishInfo {
+    ready: bool,
+    missing: Vec<String>,
+    categories: Vec<String>,
+    has_cover: bool,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ThemePublishRequest {
+    proxy: ProxyConfig,
+    theme: ThemeSelection,
+    submit: bool,
+}
+
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ThemePublishResult {
+    message: String,
+    store_url: Option<String>,
+    submitted: bool,
+    status: Option<String>,
+}
+
 #[derive(Clone, Default)]
 struct AiThemeState {
     jobs: Arc<Mutex<HashMap<String, AiThemeJob>>>,
@@ -314,6 +348,54 @@ async fn get_codex_running() -> Result<bool, String> {
 #[tauri::command]
 async fn get_ai_theme_capability() -> Result<AiThemeCapability, String> {
     Ok(ai_theme_capability())
+}
+
+#[tauri::command]
+async fn get_codedrobe_auth_status(
+    proxy: Option<ProxyConfig>,
+) -> Result<CodeDrobeAuthStatus, String> {
+    tauri::async_runtime::spawn_blocking(move || codedrobe_auth_status_blocking(proxy.as_ref()))
+        .await
+        .map_err(|error| error.to_string())?
+}
+
+#[tauri::command]
+async fn login_codedrobe(proxy: Option<ProxyConfig>) -> Result<CodeDrobeAuthStatus, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        run_codedrobe(&["auth", "login", "--json"], proxy.as_ref())?;
+        codedrobe_auth_status_blocking(proxy.as_ref())
+    })
+    .await
+    .map_err(|error| error.to_string())?
+}
+
+#[tauri::command]
+async fn logout_codedrobe(proxy: Option<ProxyConfig>) -> Result<CodeDrobeAuthStatus, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        run_codedrobe(&["auth", "logout", "--json"], proxy.as_ref())?;
+        codedrobe_auth_status_blocking(proxy.as_ref())
+    })
+    .await
+    .map_err(|error| error.to_string())?
+}
+
+#[tauri::command]
+async fn get_theme_publish_info(theme: ThemeSelection) -> Result<ThemePublishInfo, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let path = generated_theme_package_path(&theme)?;
+        inspect_theme_publish_info(&path)
+    })
+    .await
+    .map_err(|error| error.to_string())?
+}
+
+#[tauri::command]
+async fn publish_generated_theme(
+    request: ThemePublishRequest,
+) -> Result<ThemePublishResult, String> {
+    tauri::async_runtime::spawn_blocking(move || publish_generated_theme_blocking(&request))
+        .await
+        .map_err(|error| error.to_string())?
 }
 
 #[tauri::command]
@@ -1148,6 +1230,213 @@ fn theme_cache_directory() -> Result<PathBuf, String> {
         .ok_or_else(|| "无法定位 LOCALAPPDATA。".to_string())
 }
 
+fn codedrobe_auth_status_blocking(
+    proxy: Option<&ProxyConfig>,
+) -> Result<CodeDrobeAuthStatus, String> {
+    let output = run_codedrobe(&["auth", "status", "--json"], proxy)?;
+    parse_codedrobe_auth_status(&output.stdout)
+}
+
+fn parse_codedrobe_json(bytes: &[u8], context: &str) -> Result<serde_json::Value, String> {
+    serde_json::from_slice(bytes).map_err(|error| {
+        let output = decode_command_output(bytes);
+        format!(
+            "{context}返回了无法解析的 JSON：{error}；输出：{}",
+            output.trim()
+        )
+    })
+}
+
+fn parse_codedrobe_auth_status(bytes: &[u8]) -> Result<CodeDrobeAuthStatus, String> {
+    let value = parse_codedrobe_json(bytes, "CodeDrobe 登录状态")?;
+    let logged_in = value
+        .get("loggedIn")
+        .and_then(serde_json::Value::as_bool)
+        .ok_or_else(|| "CodeDrobe 登录状态缺少 loggedIn。".to_string())?;
+    let base_url = value
+        .get("baseUrl")
+        .and_then(serde_json::Value::as_str)
+        .unwrap_or(CODEDROBE_BASE)
+        .to_string();
+    let creator_handle = value
+        .get("creatorHandle")
+        .and_then(serde_json::Value::as_str)
+        .map(str::to_string);
+    Ok(CodeDrobeAuthStatus {
+        logged_in,
+        base_url,
+        creator_handle,
+    })
+}
+
+fn generated_theme_package_path(theme: &ThemeSelection) -> Result<PathBuf, String> {
+    validate_slug(&theme.slug)?;
+    let record = load_generated_theme_records()?
+        .into_iter()
+        .find(|record| record.slug == theme.slug && record.version == theme.version)
+        .ok_or_else(|| "只能发布由 Launch Deck 本地 AI 创作的主题。".to_string())?;
+    let file_name = Path::new(&record.file_name);
+    if file_name.file_name() != Some(file_name.as_os_str()) {
+        return Err("AI 主题索引包含不安全的文件路径。".to_string());
+    }
+    let path = theme_cache_directory()?.join(file_name);
+    path.is_file()
+        .then_some(path)
+        .ok_or_else(|| "AI 主题包已不在本地缓存中，请重新生成或导入。".to_string())
+}
+
+fn localized_catalog_value_present(value: Option<&serde_json::Value>) -> bool {
+    match value {
+        Some(serde_json::Value::String(text)) => !text.trim().is_empty(),
+        Some(serde_json::Value::Object(entries)) => entries
+            .values()
+            .any(|value| value.as_str().is_some_and(|text| !text.trim().is_empty())),
+        _ => false,
+    }
+}
+
+fn theme_publish_info_value(package: &serde_json::Value) -> ThemePublishInfo {
+    const STORE_CATEGORIES: [&str; 10] = [
+        "professional",
+        "minimal",
+        "nature",
+        "artistic",
+        "retro",
+        "futuristic",
+        "guofeng",
+        "character",
+        "festive",
+        "other",
+    ];
+    let catalog = package.get("theme").and_then(|value| value.get("catalog"));
+    let mut missing = Vec::new();
+    if !localized_catalog_value_present(catalog.and_then(|value| value.get("name"))) {
+        missing.push("商店名称（theme.catalog.name）".to_string());
+    }
+    if !localized_catalog_value_present(catalog.and_then(|value| value.get("description"))) {
+        missing.push("商店简介（theme.catalog.description）".to_string());
+    }
+    let categories = catalog
+        .and_then(|value| value.get("categories"))
+        .and_then(serde_json::Value::as_array)
+        .map(|values| {
+            values
+                .iter()
+                .filter_map(serde_json::Value::as_str)
+                .map(str::to_string)
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_default();
+    if categories.is_empty() {
+        missing.push("至少一个商店分类（theme.catalog.categories）".to_string());
+    } else if categories.len() > 5
+        || categories
+            .iter()
+            .any(|category| !STORE_CATEGORIES.contains(&category.as_str()))
+    {
+        missing.push("1-5 个有效的 CodeDrobe 商店分类".to_string());
+    }
+    let has_cover = package
+        .get("assets")
+        .and_then(|value| value.get("images"))
+        .and_then(serde_json::Value::as_object)
+        .is_some_and(|images| {
+            ["cover", "hero", "art"]
+                .iter()
+                .any(|name| images.contains_key(*name))
+        })
+        || package
+            .get("assets")
+            .and_then(|value| value.get("art"))
+            .is_some();
+    ThemePublishInfo {
+        ready: missing.is_empty(),
+        missing,
+        categories,
+        has_cover,
+    }
+}
+
+fn inspect_theme_publish_info(path: &Path) -> Result<ThemePublishInfo, String> {
+    let bytes = fs::read(path).map_err(|error| format!("无法读取 AI 主题包：{error}"))?;
+    let package: serde_json::Value = serde_json::from_slice(&bytes)
+        .map_err(|error| format!("AI 主题包不是有效 JSON：{error}"))?;
+    Ok(theme_publish_info_value(&package))
+}
+
+fn publish_generated_theme_blocking(
+    request: &ThemePublishRequest,
+) -> Result<ThemePublishResult, String> {
+    let auth = codedrobe_auth_status_blocking(Some(&request.proxy))?;
+    if !auth.logged_in {
+        return Err("请先登录 CodeDrobe，再发布主题。".to_string());
+    }
+    if auth.creator_handle.is_none() {
+        return Err(
+            "CodeDrobe 账号尚未创建创作者资料。请先前往账号页设置公开 Handle 和显示名称，再重新检查。"
+                .to_string(),
+        );
+    }
+    let path = generated_theme_package_path(&request.theme)?;
+    let info = inspect_theme_publish_info(&path)?;
+    if !info.ready {
+        return Err(format!(
+            "商店资料不完整：{}。请补齐主题源码并重新生成主题包。",
+            info.missing.join("、")
+        ));
+    }
+    let path_text = path.to_string_lossy().into_owned();
+    let mut arguments = vec!["theme".to_string(), "publish".to_string(), path_text];
+    if request.submit {
+        arguments.push("--submit".to_string());
+    }
+    arguments.push("--json".to_string());
+    let argument_refs = arguments.iter().map(String::as_str).collect::<Vec<_>>();
+    let output = run_codedrobe(&argument_refs, Some(&request.proxy)).map_err(|error| {
+        if error.contains("Could not reach") || error.contains("fetch failed") {
+            format!(
+                "无法通过启动器代理连接 CodeDrobe，请先检测代理后重试。若主题草稿已经上传，重试会继续处理同一主题版本，不需要重新生成。详情：{error}"
+            )
+        } else {
+            error
+        }
+    })?;
+    parse_theme_publish_result(&output.stdout, request.submit)
+}
+
+fn parse_theme_publish_result(bytes: &[u8], submitted: bool) -> Result<ThemePublishResult, String> {
+    let value = parse_codedrobe_json(bytes, "CodeDrobe 发布")?;
+    let action = value
+        .get("action")
+        .and_then(serde_json::Value::as_str)
+        .unwrap_or(if submitted { "submitted" } else { "published" });
+    let store_url = value
+        .get("storeUrl")
+        .and_then(serde_json::Value::as_str)
+        .map(str::to_string);
+    let status = value
+        .get("review")
+        .and_then(|review| review.get("status"))
+        .or_else(|| {
+            value
+                .get("version")
+                .and_then(|version| version.get("status"))
+        })
+        .and_then(serde_json::Value::as_str)
+        .map(str::to_string);
+    let message = if submitted {
+        format!("主题已提交 CodeDrobe 审核（{action}）。")
+    } else {
+        format!("主题草稿已上传到 CodeDrobe（{action}）。")
+    };
+    Ok(ThemePublishResult {
+        message,
+        store_url,
+        submitted,
+        status,
+    })
+}
+
 fn app_data_directory() -> Result<PathBuf, String> {
     env::var_os("LOCALAPPDATA")
         .map(PathBuf::from)
@@ -1455,6 +1744,7 @@ fn build_ai_theme_prompt(
 - 目标应用只能是 codex；创建 declaration-only 主题，不接入任何模型或外部服务。
 - 先完整阅读这个本地 Codex CSS 创作模板：{}。以其中已经验证过的语义选择器、Token 覆盖、响应式和可访问性结构为骨架重新设计，不要从空白 CSS 猜测 DOM。可以彻底更换配色、材质、圆角、阴影和装饰，但要保留语义挂载方式。
 - 用户选择的 Codex 基底是：{appearance_label}。`targets.codex.options.baseTheme.mode` 必须精确为 `{appearance}`，CSS 的 `color-scheme` 也必须为 `{appearance}`；所有背景、文字、边框、代码块和原生控件都要按该基底保证对比度。
+- theme.catalog 必须包含可发布到商店的资料：name 和 description 都提供非空的 en、zh 文本；categories 填 1-5 个官方分类 slug，只能从 professional、minimal、nature、artistic、retro、futuristic、guofeng、character、festive、other 中选择，禁止自造分类。
 - 图片也必须原生适配基底：light 要生成高亮、浅色占主导、有大面积明亮留白的 hero，禁止生成暗夜图后依赖白色蒙层强行漂白；dark 要生成低亮度、深色占主导但主体清晰的 hero。CSS 蒙层只能辅助可读性，不能扭转图片本身的明暗方向。
 - 背景素材模式：{visual_instruction}
 - 不要只替换背景。把主视觉中的配色、材质和视觉母题延展为完整的界面语言：用 CSS 变量统一页面、侧栏、标题栏、卡片、按钮、输入区、消息、代码块、边框、阴影和焦点状态；用渐变、伪元素、边框、阴影或轻量动画制作小装饰细节。仅当图片确实比 CSS 更适合时才增加命名图片素材。
@@ -1516,6 +1806,13 @@ fn inspect_generated_theme(
         visual_mode,
         reference_bytes.as_deref(),
     )?;
+    let publish_info = theme_publish_info_value(&package);
+    if !publish_info.ready {
+        return Err(format!(
+            "生成的主题缺少商店资料：{}。请让 Codex 补齐后重新生成。",
+            publish_info.missing.join("、")
+        ));
+    }
     let path_text = path.to_string_lossy().into_owned();
     let output = run_codedrobe(&["theme", "inspect", &path_text, "--json"], None)?;
     let value: serde_json::Value = serde_json::from_slice(&output.stdout)
@@ -2383,6 +2680,8 @@ fn apply_proxy_environment(command: &mut Command, proxy: &ProxyConfig) {
     }
     command.env("NO_PROXY", "localhost,127.0.0.1,::1");
     command.env("no_proxy", "localhost,127.0.0.1,::1");
+    // Node's native fetch ignores HTTP_PROXY unless environment proxy support is enabled.
+    command.env("NODE_USE_ENV_PROXY", "1");
 }
 
 fn run_codedrobe(args: &[&str], proxy: Option<&ProxyConfig>) -> Result<Output, String> {
@@ -2719,6 +3018,11 @@ pub fn run() {
             get_app_state,
             get_codex_running,
             get_ai_theme_capability,
+            get_codedrobe_auth_status,
+            login_codedrobe,
+            logout_codedrobe,
+            get_theme_publish_info,
+            publish_generated_theme,
             install_ai_theme_skill,
             list_generated_themes,
             start_ai_theme_generation,
@@ -2975,12 +3279,16 @@ mod tests {
 
     #[test]
     fn requires_embedded_image_for_image_visual_modes() {
-        let valid_css = [r#"
+        let valid_css = [
+            r#"
             html.codedrobe-host-codex aside.app-shell-left-panel { color: white; }
             html.codedrobe-host-codex main.main-surface { background: var(--codedrobe-image-hero); }
             html.codedrobe-host-codex header.app-header-tint { color: white; }
             html.codedrobe-host-codex .composer-surface-chrome { color: white; }
-        "#, AI_THEME_COMPONENT_COVERAGE_REFERENCE].concat();
+        "#,
+            AI_THEME_COMPONENT_COVERAGE_REFERENCE,
+        ]
+        .concat();
         let (white_png, white_bytes) = test_png([245, 248, 252]);
         let with_image = serde_json::json!({
             "assets": { "images": { "hero": { "base64": white_png } } },
@@ -3035,6 +3343,8 @@ mod tests {
         );
         assert!(prompt.contains("不要运行 PowerShell、npx、npm、codedrobe"));
         assert!(prompt.contains(r"C:\job\generated-theme\theme.json"));
+        assert!(prompt.contains("theme.catalog"));
+        assert!(prompt.contains("professional、minimal、nature"));
         assert!(!prompt.contains("最终成品必须精确写到"));
     }
 
@@ -3196,6 +3506,82 @@ mod tests {
         assert!(cover.starts_with("data:image/jpeg;base64,"));
         assert_eq!(theme.preview_url.as_deref(), Some(cover.as_str()));
         let _ = fs::remove_dir_all(cache);
+    }
+
+    #[test]
+    fn parses_codedrobe_auth_status() {
+        let status = parse_codedrobe_auth_status(
+            br#"{"action":"auth-status","loggedIn":true,"baseUrl":"https://codedrobe.app","creatorHandle":"gaopengbin"}"#,
+        )
+        .expect("auth status should parse");
+        assert!(status.logged_in);
+        assert_eq!(status.base_url, "https://codedrobe.app");
+        assert_eq!(status.creator_handle.as_deref(), Some("gaopengbin"));
+    }
+
+    #[test]
+    fn enables_node_fetch_proxy_for_codedrobe_commands() {
+        let mut command = Command::new("cmd.exe");
+        apply_proxy_environment(
+            &mut command,
+            &ProxyConfig {
+                host: "127.0.0.1".to_string(),
+                port: 10808,
+            },
+        );
+        let env_value = |key: &str| {
+            command
+                .get_envs()
+                .find(|(name, _)| *name == key)
+                .and_then(|(_, value)| value)
+                .and_then(|value| value.to_str())
+                .map(str::to_string)
+        };
+        assert_eq!(
+            env_value("HTTPS_PROXY").as_deref(),
+            Some("http://127.0.0.1:10808")
+        );
+        assert_eq!(env_value("NODE_USE_ENV_PROXY").as_deref(), Some("1"));
+    }
+
+    #[test]
+    fn requires_complete_publish_catalog() {
+        let missing = theme_publish_info_value(&serde_json::json!({
+            "theme": { "catalog": {
+                "name": { "zh": "星界" },
+                "categories": ["invented-category"]
+            } }
+        }));
+        assert!(!missing.ready);
+        assert_eq!(missing.missing.len(), 2);
+        assert!(!missing.has_cover);
+
+        let ready = theme_publish_info_value(&serde_json::json!({
+            "theme": { "catalog": {
+                "name": { "en": "Astral", "zh": "星界" },
+                "description": { "en": "A calm theme", "zh": "宁静主题" },
+                "categories": ["artistic", "futuristic"]
+            }},
+            "assets": { "images": { "hero": { "base64": "image" } } }
+        }));
+        assert!(ready.ready);
+        assert_eq!(ready.categories, ["artistic", "futuristic"]);
+        assert!(ready.has_cover);
+    }
+
+    #[test]
+    fn parses_theme_publish_result() {
+        let result = parse_theme_publish_result(
+            br#"{"action":"theme-publish","storeUrl":"https://codedrobe.app/themes/astral","review":{"status":"pending"}}"#,
+            true,
+        )
+        .expect("publish result should parse");
+        assert!(result.submitted);
+        assert_eq!(result.status.as_deref(), Some("pending"));
+        assert_eq!(
+            result.store_url.as_deref(),
+            Some("https://codedrobe.app/themes/astral")
+        );
     }
 
     #[test]

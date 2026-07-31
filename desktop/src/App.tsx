@@ -7,7 +7,7 @@ import mikuHero from './assets/miku-hero.png'
 import './App.css'
 
 type View = 'discover' | 'installed' | 'create' | 'settings'
-type BusyAction = 'proxy' | 'themes' | 'download' | 'launch' | 'apply' | 'restore' | 'skill' | null
+type BusyAction = 'proxy' | 'themes' | 'download' | 'launch' | 'apply' | 'restore' | 'skill' | 'auth' | 'publish' | null
 
 interface ProxyConfig {
   host: string
@@ -86,6 +86,26 @@ interface ActionResult {
   warning: boolean
 }
 
+interface CodeDrobeAuthStatus {
+  loggedIn: boolean
+  baseUrl: string
+  creatorHandle?: string | null
+}
+
+interface ThemePublishInfo {
+  ready: boolean
+  missing: string[]
+  categories: string[]
+  hasCover: boolean
+}
+
+interface ThemePublishResult {
+  message: string
+  storeUrl?: string | null
+  submitted: boolean
+  status?: string | null
+}
+
 const bundledTheme: Theme = {
   id: 'bundled-miku',
   slug: 'miku-future-beats',
@@ -124,6 +144,12 @@ const initialAiCapability: AiThemeCapability = {
   skillInstalled: false,
 }
 
+const initialCodeDrobeAuth: CodeDrobeAuthStatus = {
+  loggedIn: false,
+  baseUrl: 'https://codedrobe.app',
+  creatorHandle: null,
+}
+
 function Icon({ name }: { name: 'spark' | 'grid' | 'download' | 'settings' | 'search' | 'play' | 'pulse' | 'arrow' | 'refresh' }) {
   const paths = {
     spark: <><path d="M12 2l1.7 5.1L19 9l-5.3 1.9L12 16l-1.7-5.1L5 9l5.3-1.9L12 2Z" /><path d="m19 15 .8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8L19 15Z" /></>,
@@ -156,6 +182,10 @@ function App() {
   const [aiVisualMode, setAiVisualMode] = useState<'css' | 'upload' | 'ai'>('css')
   const [aiImagePath, setAiImagePath] = useState<string | null>(null)
   const [aiJob, setAiJob] = useState<AiThemeJob | null>(null)
+  const [codedrobeAuth, setCodeDrobeAuth] = useState<CodeDrobeAuthStatus>(initialCodeDrobeAuth)
+  const [publishInfo, setPublishInfo] = useState<ThemePublishInfo | null>(null)
+  const [publishStoreUrl, setPublishStoreUrl] = useState<string | null>(null)
+  const [confirmSubmit, setConfirmSubmit] = useState(false)
   const [status, setStatus] = useState('正在连接启动台…')
   const [statusTone, setStatusTone] = useState<'idle' | 'success' | 'warning' | 'error'>('idle')
   const deferredQuery = useDeferredValue(query)
@@ -186,6 +216,18 @@ function App() {
     void bootstrap()
   }, [])
 
+  const loadCodeDrobeAuth = useEffectEvent(async () => {
+    try {
+      setCodeDrobeAuth(await invoke<CodeDrobeAuthStatus>('get_codedrobe_auth_status', { proxy }))
+    } catch {
+      // Authentication remains an explicit user action; startup checks stay silent.
+    }
+  })
+
+  useEffect(() => {
+    void loadCodeDrobeAuth()
+  }, [])
+
   const loadAiState = useEffectEvent(async () => {
     try {
       const [generatedThemes, capability] = await Promise.all([
@@ -202,6 +244,28 @@ function App() {
   useEffect(() => {
     void loadAiState()
   }, [])
+
+  const selectedPublishKey = selectedTheme.generated
+    ? `${selectedTheme.slug}@${selectedTheme.version}`
+    : null
+
+  const loadPublishInfo = useEffectEvent(async () => {
+    if (!selectedTheme.generated) return
+    try {
+      setPublishInfo(await invoke<ThemePublishInfo>('get_theme_publish_info', {
+        theme: themeSelection(selectedTheme),
+      }))
+    } catch (error) {
+      setPublishInfo({ ready: false, missing: [formatError(error)], categories: [], hasCover: false })
+    }
+  })
+
+  useEffect(() => {
+    setPublishInfo(null)
+    setPublishStoreUrl(null)
+    setConfirmSubmit(false)
+    if (selectedPublishKey) void loadPublishInfo()
+  }, [selectedPublishKey])
 
   const pollAiThemeJob = useEffectEvent(async (id: string) => {
     const nextJob = await invoke<AiThemeJob>('get_ai_theme_job', { id })
@@ -451,6 +515,89 @@ function App() {
     }
   }
 
+  async function loginCodeDrobe() {
+    setBusy('auth')
+    setStatus('正在打开 CodeDrobe 安全登录…')
+    setStatusTone('idle')
+    try {
+      const auth = await invoke<CodeDrobeAuthStatus>('login_codedrobe', { proxy })
+      setCodeDrobeAuth(auth)
+      if (auth.creatorHandle) {
+        setStatus(`CodeDrobe 创作者 @${auth.creatorHandle} 登录成功，现在可以上传本地 AI 主题。`)
+        setStatusTone('success')
+      } else {
+        setStatus('CodeDrobe 登录成功；请先创建创作者资料，再上传主题。')
+        setStatusTone('warning')
+      }
+    } catch (error) {
+      setStatus(formatError(error))
+      setStatusTone('error')
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  async function logoutCodeDrobe() {
+    setBusy('auth')
+    setStatus('正在退出 CodeDrobe…')
+    setStatusTone('idle')
+    try {
+      const auth = await invoke<CodeDrobeAuthStatus>('logout_codedrobe', { proxy })
+      setCodeDrobeAuth(auth)
+      setConfirmSubmit(false)
+      setStatus('已退出 CodeDrobe，Launch Deck 未保存任何登录凭据。')
+      setStatusTone('success')
+    } catch (error) {
+      setStatus(formatError(error))
+      setStatusTone('error')
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  async function refreshCodeDrobeProfile() {
+    setBusy('auth')
+    setStatus('正在重新检查 CodeDrobe 创作者资料…')
+    setStatusTone('idle')
+    try {
+      const auth = await invoke<CodeDrobeAuthStatus>('get_codedrobe_auth_status', { proxy })
+      setCodeDrobeAuth(auth)
+      if (auth.creatorHandle) {
+        setStatus(`CodeDrobe 创作者 @${auth.creatorHandle} 已就绪。`)
+        setStatusTone('success')
+      } else {
+        setStatus('尚未检测到创作者资料，请在 CodeDrobe 账号页完成创建后再试。')
+        setStatusTone('warning')
+      }
+    } catch (error) {
+      setStatus(formatError(error))
+      setStatusTone('error')
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  async function publishSelectedTheme(submit: boolean) {
+    if (!selectedTheme.generated || !publishInfo?.ready) return
+    setBusy('publish')
+    setStatus(submit ? '正在提交 CodeDrobe 商店审核…' : '正在上传 CodeDrobe 主题草稿…')
+    setStatusTone('idle')
+    try {
+      const result = await invoke<ThemePublishResult>('publish_generated_theme', {
+        request: { proxy, theme: themeSelection(selectedTheme), submit },
+      })
+      setPublishStoreUrl(result.storeUrl ?? null)
+      setConfirmSubmit(false)
+      setStatus(result.message)
+      setStatusTone('success')
+    } catch (error) {
+      setStatus(formatError(error))
+      setStatusTone('error')
+    } finally {
+      setBusy(null)
+    }
+  }
+
   const normalizedQuery = deferredQuery.trim().toLocaleLowerCase()
   let visibleThemes = themes.filter((theme) => {
     if (view === 'installed' && !isInstalled(theme, appState.cachedThemes)) return false
@@ -563,7 +710,7 @@ function App() {
           </div>
         </section>
 
-        <div className={`status-strip ${statusTone}`}>
+        <div className={`status-strip ${statusTone}`} role="status" aria-live="polite">
           <span className="status-light" />
           <p>{status}</p>
           {busy === 'download' && downloadProgress !== null && <span className="status-percent">{Math.round(downloadProgress)}%</span>}
@@ -681,6 +828,83 @@ function App() {
                 <div className="download-progress-track"><i style={{ width: `${downloadProgress}%` }} /></div>
               </div>
             )}
+            {selectedTheme.generated && isInstalled(selectedTheme, appState.cachedThemes) && (
+              <section className="publisher-card">
+                <div className="publisher-head">
+                  <div>
+                    <span>CREATOR PUBLISH</span>
+                    <strong>发布到 CodeDrobe</strong>
+                  </div>
+                  <span className={`auth-chip ${codedrobeAuth.creatorHandle ? 'online' : ''}`}>
+                    {!codedrobeAuth.loggedIn ? '未登录' : codedrobeAuth.creatorHandle ? `@${codedrobeAuth.creatorHandle}` : '待完善'}
+                  </span>
+                </div>
+                <p>通过官方 CLI 安全连接。Launch Deck 不读取、不保存你的账号凭据。</p>
+                {publishInfo === null ? (
+                  <div className="publish-note">正在检查商店资料…</div>
+                ) : !publishInfo.ready ? (
+                  <div className="publish-note warning">
+                    <b>暂不可发布</b>
+                    <span>{publishInfo.missing.join('、')}</span>
+                  </div>
+                ) : (
+                  <div className="publish-note ready">
+                    <b>商店资料完整</b>
+                    <span>{publishInfo.categories.join(' · ') || '分类已就绪'}</span>
+                  </div>
+                )}
+                {publishInfo && !publishInfo.hasCover && (
+                  <div className="cover-warning">建议补充 hero 或 cover 图片，商店展示会更完整。</div>
+                )}
+                {!codedrobeAuth.loggedIn ? (
+                  <button className="publisher-login" onClick={() => void loginCodeDrobe()} disabled={busy !== null}>
+                    {busy === 'auth' ? '等待浏览器确认…' : '登录 CodeDrobe'}
+                  </button>
+                ) : !codedrobeAuth.creatorHandle ? (
+                  <div className="creator-setup">
+                    <div className="publish-note warning">
+                      <b>还差一步：创建创作者资料</b>
+                      <span>CodeDrobe 要求先设置公开 Handle 和显示名称，之后才能上传主题。</span>
+                    </div>
+                    <button
+                      className="publisher-login"
+                      onClick={() => void openUrl(`${codedrobeAuth.baseUrl}/zh/account`)}
+                      disabled={busy !== null}
+                    >
+                      完善创作者资料 →
+                    </button>
+                    <button className="profile-refresh" onClick={() => void refreshCodeDrobeProfile()} disabled={busy !== null}>
+                      {busy === 'auth' ? '检查中…' : '我已完成，重新检查'}
+                    </button>
+                    <button className="publisher-logout" onClick={() => void logoutCodeDrobe()} disabled={busy !== null}>退出 CodeDrobe</button>
+                  </div>
+                ) : (
+                  <>
+                    <div className="publish-actions">
+                      <button onClick={() => void publishSelectedTheme(false)} disabled={busy !== null || !publishInfo?.ready}>
+                        {busy === 'publish' ? '处理中…' : '上传草稿'}
+                      </button>
+                      <button className="review" onClick={() => setConfirmSubmit(true)} disabled={busy !== null || !publishInfo?.ready}>
+                        提交审核
+                      </button>
+                    </div>
+                    {confirmSubmit && (
+                      <div className="submit-confirm">
+                        <p>提交后将进入 CodeDrobe 审核队列，确认继续吗？</p>
+                        <div>
+                          <button onClick={() => void publishSelectedTheme(true)} disabled={busy !== null}>确认提交审核</button>
+                          <button onClick={() => setConfirmSubmit(false)} disabled={busy !== null}>取消</button>
+                        </div>
+                      </div>
+                    )}
+                    <button className="publisher-logout" onClick={() => void logoutCodeDrobe()} disabled={busy !== null}>退出 CodeDrobe</button>
+                  </>
+                )}
+                {publishStoreUrl && (
+                  <button className="store-result" onClick={() => void openUrl(publishStoreUrl)}>查看商店页面 →</button>
+                )}
+              </section>
+            )}
             <button
               className="select-launch"
               onClick={() => {
@@ -704,21 +928,31 @@ function App() {
 
 function TitleBar() {
   const appWindow = getCurrentWindow()
+
+  const isWindowControl = (target: EventTarget | null) =>
+    target instanceof Element && Boolean(target.closest('.window-controls'))
+
   return (
     <header
       className="custom-titlebar"
-      data-tauri-drag-region
-      onMouseDown={(event) => {
-        if (event.button === 0 && !(event.target as Element).closest('.window-controls')) {
+      onMouseDownCapture={(event) => {
+        if (event.button === 0 && !isWindowControl(event.target)) {
+          event.preventDefault()
           void appWindow.startDragging()
         }
       }}
-      onDoubleClick={() => void appWindow.toggleMaximize()}
+      onDoubleClick={(event) => {
+        if (!isWindowControl(event.target)) {
+          void appWindow.toggleMaximize()
+        }
+      }}
     >
-      <div className="titlebar-brand" data-tauri-drag-region>
-        <span>01</span>
-        <strong data-tauri-drag-region>Codex Proxy Launch Deck</strong>
-        <i data-tauri-drag-region>LOCAL</i>
+      <div className="titlebar-drag-zone">
+        <div className="titlebar-brand">
+          <span>01</span>
+          <strong>Codex Proxy Launch Deck</strong>
+          <i>LOCAL</i>
+        </div>
       </div>
       <div className="window-controls">
         <button aria-label="最小化" onClick={() => void appWindow.minimize()}><span className="minimize-icon" /></button>
@@ -887,8 +1121,8 @@ function SettingsPanel({ appState, busy, onRestore, onOpenStore }: { appState: A
         </article>
         <article>
           <span className="setting-number">03</span>
-          <h3>官方主题管理器</h3>
-          <p>登录、收藏、发布和跨应用管理请使用 CodeDrobe Desktop。</p>
+          <h3>CodeDrobe 创作者连接</h3>
+          <p>Launch Deck 已支持通过官方 CLI 登录和发布本地 AI 主题；完整商店与跨应用管理仍可使用 CodeDrobe Desktop。</p>
           <button className="secondary" onClick={onOpenStore}>下载 CodeDrobe Desktop</button>
         </article>
       </div>

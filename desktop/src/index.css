@@ -1,5 +1,8 @@
+@import "@fontsource-variable/noto-sans-sc";
+
 html {
-  font-family: "Aptos", "Microsoft YaHei UI", sans-serif;
+  font-family: "Noto Sans SC Variable", "Microsoft YaHei UI", sans-serif;
+  font-optical-sizing: auto;
   color-scheme: light;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
@@ -10,6 +13,8 @@ body {
   margin: 0;
   min-width: 760px;
   min-height: 100vh;
+  font-size: 13px;
+  font-weight: 450;
 }
 
 ::selection {
