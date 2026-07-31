@@ -14,7 +14,7 @@ use std::{
     process::{Child, Command, Output, Stdio},
     sync::{Arc, Mutex},
     thread,
-    time::Duration,
+    time::{Duration, Instant},
 };
 use tauri::{AppHandle, Manager, State};
 use tungstenite::{connect as connect_websocket, Message};
@@ -25,6 +25,64 @@ use std::os::windows::process::CommandExt;
 const CODEDROBE_BASE: &str = "https://codedrobe.app";
 const CODEDROBE_PORT: u16 = 9335;
 const BUNDLED_THEME_FILE: &str = "miku-future-beats-1.2.1.codedrobe-theme";
+const AI_THEME_COMPONENT_COVERAGE_REFERENCE: &str = r#"
+
+/* Launch Deck coverage contract for Codex 26.721+.
+   Preserve and redesign these semantic mounts instead of removing them. */
+:root.codedrobe-host-codex {
+  --theme-overlay: var(--theme-surface-strong);
+  --theme-overlay-border: var(--theme-border);
+  --color-token-bg-tertiary: var(--theme-surface-soft) !important;
+  --color-token-text-tertiary: var(--theme-muted) !important;
+  --color-token-description-foreground: var(--theme-muted) !important;
+  --color-token-icon-foreground: var(--theme-text) !important;
+  --color-token-border-default: var(--theme-overlay-border) !important;
+  --color-token-border-heavy: var(--theme-overlay-border) !important;
+  --color-token-toolbar-hover-background: var(--theme-accent-soft) !important;
+  --color-token-dropdown-background: var(--theme-overlay) !important;
+  --color-token-dropdown-foreground: var(--theme-text) !important;
+  --color-token-menu-background: var(--theme-overlay) !important;
+  --color-token-menu-border: var(--theme-overlay-border) !important;
+  --color-token-conversation-summary-leading: var(--theme-muted) !important;
+  --color-token-conversation-summary-trailing: var(--theme-muted) !important;
+}
+
+/* Right-side output/sources summary panel. */
+html.codedrobe-host-codex .top-\(--thread-floating-content-top-inset\) .bg-token-dropdown-background {
+  border: 1px solid var(--theme-overlay-border) !important;
+  background: var(--theme-overlay) !important;
+  color: var(--theme-text) !important;
+  box-shadow: 0 18px 44px var(--theme-shadow) !important;
+  backdrop-filter: blur(20px) saturate(1.08);
+}
+
+html.codedrobe-host-codex .group\/summary-panel-item {
+  color: var(--theme-text) !important;
+}
+
+/* Radix portals used by tooltips, menus, select popovers, and context menus. */
+html.codedrobe-host-codex [data-radix-popper-content-wrapper] > [data-side],
+html.codedrobe-host-codex :is([role="tooltip"], [role="menu"], [role="listbox"]) {
+  border: 1px solid var(--theme-overlay-border) !important;
+  background: var(--theme-overlay) !important;
+  color: var(--theme-text) !important;
+  box-shadow: 0 12px 34px var(--theme-shadow) !important;
+  backdrop-filter: blur(18px) saturate(1.08);
+}
+
+html.codedrobe-host-codex :is([role="menuitem"], [role="option"]):is(:hover, [data-highlighted]) {
+  background: var(--theme-accent-soft) !important;
+  color: var(--theme-text) !important;
+}
+
+/* Modal and non-modal dialogs must share the same surface language. */
+html.codedrobe-host-codex [role="dialog"] {
+  border-color: var(--theme-overlay-border) !important;
+  background-color: var(--theme-overlay) !important;
+  color: var(--theme-text) !important;
+  box-shadow: 0 22px 60px var(--theme-shadow) !important;
+}
+"#;
 #[cfg(target_os = "windows")]
 const CREATE_NO_WINDOW: u32 = 0x08000000;
 
@@ -89,6 +147,7 @@ struct AiThemeRequest {
     appearance: String,
     visual_mode: String,
     image_path: Option<String>,
+    proxy: ProxyConfig,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -344,6 +403,9 @@ async fn start_ai_theme_generation(
     if !capability.skill_installed {
         return Err("请先安装 CodeDrobe 主题创作能力。".to_string());
     }
+    let proxy = verify_proxy(&request.proxy)
+        .is_ok()
+        .then_some(request.proxy);
 
     let id = format!(
         "{}-{}",
@@ -368,7 +430,15 @@ async fn start_ai_theme_generation(
         .insert(id.clone(), job.clone());
     let shared_jobs = jobs.jobs.clone();
     thread::spawn(move || {
-        run_ai_theme_job(shared_jobs, id, prompt, appearance, visual_mode, image_path)
+        run_ai_theme_job(
+            shared_jobs,
+            id,
+            prompt,
+            appearance,
+            visual_mode,
+            image_path,
+            proxy,
+        )
     });
     Ok(job)
 }
@@ -562,7 +632,22 @@ fn launch_codex_blocking(
         let port = selected_port.to_string();
         let path = theme_path.to_string_lossy().into_owned();
         let apply_args = ["apply", "--app", "codex", "--port", &port, "--theme", &path];
-        if let Err(error) = run_codedrobe(&apply_args, Some(&request.proxy)) {
+        let retry_args = [
+            "apply",
+            "--app",
+            "codex",
+            "--port",
+            &port,
+            "--theme",
+            &path,
+            "--no-launch",
+        ];
+        if let Err(error) = run_codedrobe_apply_with_retry(
+            &apply_args,
+            &retry_args,
+            Some(&request.proxy),
+            selected_port,
+        ) {
             if is_codex_running() {
                 return Ok(ActionResult {
                     message: format!(
@@ -666,18 +751,21 @@ fn apply_theme_blocking(
     let port = selected_port.to_string();
 
     stop_watcher(watcher)?;
-    run_codedrobe(
-        &[
-            "apply",
-            "--app",
-            "codex",
-            "--port",
-            &port,
-            "--theme",
-            &path,
-            "--no-launch",
-        ],
+    let apply_args = [
+        "apply",
+        "--app",
+        "codex",
+        "--port",
+        &port,
+        "--theme",
+        &path,
+        "--no-launch",
+    ];
+    run_codedrobe_apply_with_retry(
+        &apply_args,
+        &apply_args,
         Some(proxy),
+        selected_port,
     )
     .map_err(|error| {
         format!(
@@ -1070,8 +1158,7 @@ fn app_data_directory() -> Result<PathBuf, String> {
 fn ai_theme_capability() -> AiThemeCapability {
     let skill_path = ai_theme_skill_path();
     AiThemeCapability {
-        codex_cli_available: find_on_path("codex.cmd").is_some()
-            || find_on_path("codex.exe").is_some(),
+        codex_cli_available: find_codex_cli().is_some(),
         skill_installed: skill_path.is_some(),
         skill_path: skill_path.map(|path| path.to_string_lossy().into_owned()),
     }
@@ -1126,6 +1213,7 @@ fn run_ai_theme_job(
     appearance: String,
     visual_mode: String,
     image_path: Option<PathBuf>,
+    proxy: Option<ProxyConfig>,
 ) {
     if let Err(error) = run_ai_theme_job_inner(
         &jobs,
@@ -1134,6 +1222,7 @@ fn run_ai_theme_job(
         &appearance,
         &visual_mode,
         image_path.as_deref(),
+        proxy.as_ref(),
     ) {
         fail_ai_job(&jobs, &id, error);
     }
@@ -1146,6 +1235,7 @@ fn run_ai_theme_job_inner(
     appearance: &str,
     visual_mode: &str,
     image_path: Option<&Path>,
+    proxy: Option<&ProxyConfig>,
 ) -> Result<(), String> {
     let work_dir = app_data_directory()?.join("ai-themes").join(id);
     fs::create_dir_all(&work_dir).map_err(|error| format!("无法创建 AI 创作目录：{error}"))?;
@@ -1175,9 +1265,10 @@ fn run_ai_theme_job_inner(
         &authoring_reference,
         &manifest_path,
     );
-    let codex = find_on_path("codex.cmd")
-        .or_else(|| find_on_path("codex.exe"))
-        .ok_or_else(|| "未找到 Codex CLI。".to_string())?;
+    let codex = find_codex_cli().ok_or_else(|| {
+        "未找到可执行的 Codex CLI。Microsoft Store 内置副本不能由外部程序直接启动，请安装 Codex CLI 或 OpenAI VS Code 扩展。"
+            .to_string()
+    })?;
 
     update_ai_job(jobs, id, |job| {
         job.phase = "Codex 正在设计主题".to_string();
@@ -1186,7 +1277,15 @@ fn run_ai_theme_job_inner(
             .push("已启用 workspace-write 沙箱，开始生成主题。".to_string());
     });
 
-    let mut child = background_command(codex)
+    let mut command = codex_cli_command(&codex);
+    if let Some(proxy) = proxy {
+        apply_proxy_environment(&mut command, proxy);
+        update_ai_job(jobs, id, |job| {
+            job.logs
+                .push("已复用启动器代理连接 Codex 服务。".to_string());
+        });
+    }
+    let mut child = command
         .args([
             "exec",
             "--json",
@@ -1315,6 +1414,11 @@ fn stage_ai_authoring_reference(work_dir: &Path) -> Result<PathBuf, String> {
     fs::create_dir_all(&reference_dir).map_err(|error| format!("无法创建主题模板目录：{error}"))?;
     let destination = reference_dir.join("codex.css");
     fs::copy(&source, &destination).map_err(|error| format!("无法准备 Codex 主题模板：{error}"))?;
+    fs::OpenOptions::new()
+        .append(true)
+        .open(&destination)
+        .and_then(|mut file| file.write_all(AI_THEME_COMPONENT_COVERAGE_REFERENCE.as_bytes()))
+        .map_err(|error| format!("无法追加 Codex 组件覆盖模板：{error}"))?;
     Ok(destination)
 }
 
@@ -1354,6 +1458,7 @@ fn build_ai_theme_prompt(
 - 图片也必须原生适配基底：light 要生成高亮、浅色占主导、有大面积明亮留白的 hero，禁止生成暗夜图后依赖白色蒙层强行漂白；dark 要生成低亮度、深色占主导但主体清晰的 hero。CSS 蒙层只能辅助可读性，不能扭转图片本身的明暗方向。
 - 背景素材模式：{visual_instruction}
 - 不要只替换背景。把主视觉中的配色、材质和视觉母题延展为完整的界面语言：用 CSS 变量统一页面、侧栏、标题栏、卡片、按钮、输入区、消息、代码块、边框、阴影和焦点状态；用渐变、伪元素、边框、阴影或轻量动画制作小装饰细节。仅当图片确实比 CSS 更适合时才增加命名图片素材。
+- 必须覆盖模板末尾的完整组件清单：右侧输出/来源摘要面板（thread floating content 与 summary-panel-item）、Tooltip、Popover、Dropdown、Menu、Select/Listbox、Dialog，以及它们的 hover、open、highlighted 和 focus-visible 状态。浮层不能继续使用与主题不一致的系统灰色，也不能只改文字不改表面、边框和阴影。
 - 图片只能作为背景、纹理或非交互装饰，不能作为全窗口 UI 截图覆盖应用。所有装饰层必须 `pointer-events: none`，窄窗口要有响应式降级，并为动画提供 `prefers-reduced-motion` 处理。
 - 图片模式下，hero 必须直接挂载到 `main.main-surface`、它的伪元素或模板中的首页 hero 节点，确保不会被 Codex 的不透明主表面遮住；body 可以有纹理，但不能是 hero 的唯一挂载点。
 - 禁止用 `:where(aside)`、`:where(header)`、`:where(button)`、`[class*="card"]` 等全局宽泛选择器批量覆盖原生组件。侧栏、主工作区、标题栏和输入区至少分别使用 `aside.app-shell-left-panel`、`main.main-surface`、`header.app-header-tint` 和 `.composer-surface-chrome` 定向设计。
@@ -1598,6 +1703,13 @@ fn validate_generated_css_quality_contract(css: &str, visual_mode: &str) -> Resu
         "main.main-surface",
         "header.app-header-tint",
         ".composer-surface-chrome",
+        "--color-token-dropdown-background",
+        "--color-token-menu-background",
+        "--thread-floating-content-top-inset",
+        "group\\/summary-panel-item",
+        "data-radix-popper-content-wrapper",
+        "[role=\"tooltip\"]",
+        "[role=\"dialog\"]",
     ] {
         if !css.contains(required) {
             return Err(format!(
@@ -2288,6 +2400,64 @@ fn run_codedrobe(args: &[&str], proxy: Option<&ProxyConfig>) -> Result<Output, S
     }
 }
 
+fn run_codedrobe_apply_with_retry(
+    initial_args: &[&str],
+    retry_args: &[&str],
+    proxy: Option<&ProxyConfig>,
+    port: u16,
+) -> Result<Output, String> {
+    match run_codedrobe(initial_args, proxy) {
+        Ok(output) => Ok(output),
+        Err(initial_error) if is_transient_codedrobe_preflight_error(&initial_error) => {
+            wait_for_codex_theme_surface(port, Duration::from_secs(15)).map_err(|wait_error| {
+                format!("{initial_error}；自动重试前等待 Codex 主窗口失败：{wait_error}")
+            })?;
+            run_codedrobe(retry_args, proxy)
+                .map_err(|retry_error| format!("{retry_error}（Codex 主窗口稳定后自动重试仍失败）"))
+        }
+        Err(error) => Err(error),
+    }
+}
+
+fn is_transient_codedrobe_preflight_error(error: &str) -> bool {
+    error.contains("DOM preflight failed")
+        || error.contains("No OpenAI Codex renderer target")
+        || error.contains("CODEDROBE_TARGET_TIMEOUT")
+}
+
+fn wait_for_codex_theme_surface(port: u16, timeout: Duration) -> Result<(), String> {
+    let started = Instant::now();
+    while started.elapsed() < timeout {
+        let ready = cdp_request(
+            port,
+            "Runtime.evaluate",
+            serde_json::json!({
+                "expression": "Boolean(document.querySelector('main.main-surface'))",
+                "returnByValue": true
+            }),
+        )
+        .ok()
+        .and_then(|response| {
+            response
+                .get("result")
+                .and_then(|value| value.get("result"))
+                .and_then(|value| value.get("value"))
+                .and_then(|value| value.as_bool())
+        })
+        .unwrap_or(false);
+        if ready {
+            // Let the shell finish mounting route-specific nodes before Core probes it.
+            thread::sleep(Duration::from_millis(500));
+            return Ok(());
+        }
+        thread::sleep(Duration::from_millis(250));
+    }
+    Err(format!(
+        "在 {} 秒内没有检测到 main.main-surface（CDP {port}）",
+        timeout.as_secs()
+    ))
+}
+
 fn spawn_codedrobe(args: &[&str], proxy: Option<&ProxyConfig>) -> Result<Child, String> {
     let mut command = codedrobe_command(args)?;
     if let Some(proxy) = proxy {
@@ -2372,6 +2542,88 @@ fn find_on_path(file_name: &str) -> Option<PathBuf> {
         env::split_paths(&path)
             .map(|directory| directory.join(file_name))
             .find(|candidate| candidate.is_file())
+    })
+}
+
+fn find_codex_cli() -> Option<PathBuf> {
+    let mut candidates = Vec::new();
+    if let Some(path) = find_on_path("codex.cmd") {
+        candidates.push(path);
+    }
+    if let Some(path) = find_on_path("codex.exe") {
+        candidates.push(path);
+    }
+
+    if let Some(user_profile) = env::var_os("USERPROFILE").map(PathBuf::from) {
+        let extensions = user_profile.join(".vscode").join("extensions");
+        let mut vscode_candidates = fs::read_dir(extensions)
+            .ok()
+            .into_iter()
+            .flatten()
+            .filter_map(Result::ok)
+            .filter(|entry| {
+                entry
+                    .file_name()
+                    .to_string_lossy()
+                    .starts_with("openai.chatgpt-")
+            })
+            .map(|entry| {
+                entry
+                    .path()
+                    .join("bin")
+                    .join("windows-x86_64")
+                    .join("codex.exe")
+            })
+            .collect::<Vec<_>>();
+        vscode_candidates.sort_by(|left, right| right.cmp(left));
+        candidates.extend(vscode_candidates);
+        candidates.push(
+            user_profile
+                .join(".codex")
+                .join("plugins")
+                .join(".plugin-appserver")
+                .join("codex.exe"),
+        );
+        candidates.push(
+            user_profile
+                .join(".codex")
+                .join(".sandbox-bin")
+                .join("codex.exe"),
+        );
+    }
+
+    candidates.into_iter().find(|candidate| {
+        candidate.is_file()
+            && !is_windowsapps_path(candidate)
+            && codex_cli_command(candidate)
+                .arg("--version")
+                .stdout(Stdio::null())
+                .stderr(Stdio::null())
+                .status()
+                .is_ok_and(|status| status.success())
+    })
+}
+
+fn codex_cli_command(path: &Path) -> Command {
+    if path
+        .extension()
+        .and_then(|value| value.to_str())
+        .is_some_and(|value| value.eq_ignore_ascii_case("cmd"))
+    {
+        let mut command = background_command("cmd.exe");
+        command.args(["/d", "/s", "/c"]).arg(path);
+        command
+    } else {
+        background_command(path)
+    }
+}
+
+fn is_windowsapps_path(path: &Path) -> bool {
+    path.components().any(|component| {
+        component
+            .as_os_str()
+            .to_string_lossy()
+            .eq_ignore_ascii_case("WindowsApps")
     })
 }
 
@@ -2509,6 +2761,29 @@ mod tests {
         assert!(validate_slug("pastel-morning").is_ok());
         assert!(validate_slug("../theme").is_err());
         assert!(validate_slug("Theme Name").is_err());
+    }
+
+    #[test]
+    fn retries_only_transient_codedrobe_startup_failures() {
+        assert!(is_transient_codedrobe_preflight_error(
+            "[codedrobe] OpenAI Codex DOM preflight failed for 2 of 2 renderer target(s)"
+        ));
+        assert!(is_transient_codedrobe_preflight_error(
+            "No OpenAI Codex renderer target on 127.0.0.1:9335"
+        ));
+        assert!(!is_transient_codedrobe_preflight_error(
+            "Theme package checksum mismatch"
+        ));
+    }
+
+    #[test]
+    fn rejects_store_managed_codex_cli_path() {
+        assert!(is_windowsapps_path(Path::new(
+            r"C:\Program Files\WindowsApps\OpenAI.Codex_1.0.0_x64\app\resources\codex.exe"
+        )));
+        assert!(!is_windowsapps_path(Path::new(
+            r"C:\Users\user\.vscode\extensions\openai.chatgpt-1.0.0\bin\windows-x86_64\codex.exe"
+        )));
     }
 
     #[test]
@@ -2700,12 +2975,12 @@ mod tests {
 
     #[test]
     fn requires_embedded_image_for_image_visual_modes() {
-        let valid_css = r#"
+        let valid_css = [r#"
             html.codedrobe-host-codex aside.app-shell-left-panel { color: white; }
             html.codedrobe-host-codex main.main-surface { background: var(--codedrobe-image-hero); }
             html.codedrobe-host-codex header.app-header-tint { color: white; }
             html.codedrobe-host-codex .composer-surface-chrome { color: white; }
-        "#;
+        "#, AI_THEME_COMPONENT_COVERAGE_REFERENCE].concat();
         let (white_png, white_bytes) = test_png([245, 248, 252]);
         let with_image = serde_json::json!({
             "assets": { "images": { "hero": { "base64": white_png } } },
@@ -2736,7 +3011,8 @@ mod tests {
             "prompt": "深海夜航主题",
             "appearance": "dark",
             "visualMode": "upload",
-            "imagePath": "C:\\Images\\background.png"
+            "imagePath": "C:\\Images\\background.png",
+            "proxy": { "host": "127.0.0.1", "port": 10808 }
         }))
         .expect("frontend request should deserialize");
         assert_eq!(request.visual_mode, "upload");
@@ -2744,6 +3020,7 @@ mod tests {
             request.image_path.as_deref(),
             Some(r"C:\Images\background.png")
         );
+        assert_eq!(request.proxy.port, 10808);
     }
 
     #[test]
@@ -2776,6 +3053,8 @@ mod tests {
         assert!(upload_prompt.contains("不适合时不要为了凑数量生成纹理"));
         assert!(upload_prompt.contains("不要只替换背景"));
         assert!(upload_prompt.contains("卡片、按钮、输入区、消息、代码块"));
+        assert!(upload_prompt.contains("右侧输出/来源摘要面板"));
+        assert!(upload_prompt.contains("Tooltip、Popover、Dropdown"));
         assert!(upload_prompt.contains("prefers-reduced-motion"));
         assert!(upload_prompt.contains("preservedAnchors"));
         assert!(upload_prompt.contains("不得擅自改成无人物空景"));
@@ -2817,6 +3096,25 @@ mod tests {
             "html.codedrobe-host-codex :where(button)",
         );
         assert!(validate_generated_css_quality_contract(&broad, "css").is_err());
+    }
+
+    #[test]
+    fn requires_generated_theme_component_coverage() {
+        let complete = format!(
+            r#"
+            html.codedrobe-host-codex aside.app-shell-left-panel {{ color: white; }}
+            html.codedrobe-host-codex main.main-surface {{ color: white; }}
+            html.codedrobe-host-codex header.app-header-tint {{ color: white; }}
+            html.codedrobe-host-codex .composer-surface-chrome {{ color: white; }}
+            {}"#,
+            AI_THEME_COMPONENT_COVERAGE_REFERENCE
+        );
+        assert!(validate_generated_css_quality_contract(&complete, "css").is_ok());
+        assert!(validate_generated_css_quality_contract(
+            &complete.replace("[role=\"tooltip\"]", "[data-missing-tooltip]"),
+            "css"
+        )
+        .is_err());
     }
 
     #[test]

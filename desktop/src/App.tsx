@@ -354,7 +354,7 @@ function App() {
     setStatusTone('idle')
     try {
       const job = await invoke<AiThemeJob>('start_ai_theme_generation', {
-        request: { prompt: aiPrompt, appearance: aiAppearance, visualMode: aiVisualMode, imagePath: aiImagePath },
+        request: { prompt: aiPrompt, appearance: aiAppearance, visualMode: aiVisualMode, imagePath: aiImagePath, proxy },
       })
       setAiJob(job)
       setStatus('Codex 已开始创作主题，可以在下方查看实时进度。')
