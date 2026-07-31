@@ -11,7 +11,8 @@
 
 Launch Codex through a process-scoped HTTP proxy without changing the Windows
 system proxy, then discover and apply CodeDrobe themes from the same desktop
-application.
+application. Launch Deck can also ask your locally authenticated Codex CLI to
+create a custom theme from a written brief or reference image.
 
 ## Why
 
@@ -29,13 +30,33 @@ application.
   and close controls
 - Automatic discovery of Microsoft Store/MSIX Codex installations
 - Proxy connectivity check and accurate Codex process detection
-- CodeDrobe marketplace browsing, search, sorting, installation, and local cache
+- CodeDrobe marketplace browsing, search, sorting, installation, download
+  progress, integrity checking, and local cache
 - Bundled `Hatsune Miku · Future Beats` theme for offline use
-- Live theme application to a running Codex window
+- Light/dark labels on theme cards and automatic synchronization of the native
+  Codex appearance mode required by the selected theme
+- Local Codex-powered custom theme generation with CSS-only, uploaded-reference,
+  and AI-background modes
+- Generated hero artwork, optional supporting textures, and theme-card covers
+- Live theme application to a running Codex window without restarting it
 - Managed theme watcher for renderer reloads
 - Adaptive loopback CDP port selection to avoid stale `9335` conflicts
-- Native appearance restoration
+- Native appearance restoration and persistent watcher cleanup
+- Hidden background commands, so theme and process operations do not flash
+  console windows
 - English and Simplified Chinese interface
+
+## What's new in 2.1
+
+- Create and cache complete `.codedrobe-theme` packages through the signed-in
+  Codex CLI without configuring another model provider or API key.
+- Use a local image as a visual reference; the generation workflow preserves
+  important composition anchors instead of treating the file as a raw overlay.
+- Choose the intended light or dark Codex base before generation. Theme cards
+  display that requirement, and applying the theme switches Codex through its
+  native appearance action.
+- Follow generation and marketplace-download progress inside Launch Deck, with
+  clearer failures and no native HTML number spinner in the proxy-port control.
 
 ## Download
 
@@ -58,6 +79,11 @@ a warning.
 3. Select a theme, or leave theme mode disabled.
 4. Select **Launch Codex**.
 
+If Codex is already running with a CDP port, select **Apply theme live** instead.
+Launch Deck reads the theme's declared light/dark base and synchronizes the
+running Codex window automatically. Restoring the native appearance returns the
+managed Codex settings and removes the injected theme.
+
 Launch Deck sets uppercase and lowercase forms of `HTTP_PROXY`, `HTTPS_PROXY`,
 and `NO_PROXY` only for the launched process tree. It never changes the Windows
 system proxy.
@@ -68,6 +94,55 @@ stable global `codedrobe` command when available and can fall back to `npx`.
 > If your proxy application exposes a SOCKS port, use its HTTP or mixed port.
 > This launcher supplies an HTTP proxy URL.
 
+## Create a custom theme with Codex
+
+This workflow reuses the Codex CLI already installed and signed in on the
+computer. It does not require a separate API key or an embedded model service.
+
+1. Open **AI custom theme** in Launch Deck.
+2. Enter a visual brief and choose the required **Light** or **Dark** base.
+3. Choose one visual mode:
+   - **CSS only** for gradients, glass, borders, shadows, and motion without a
+     bitmap background.
+   - **Upload reference** to generate a coordinated theme and artwork from a
+     local image.
+   - **AI background** to let Codex create the hero artwork from the brief.
+4. Start generation and follow the staged progress. Launch Deck validates the
+   package, generates or hydrates its card cover, and adds it to the local theme
+   library when complete.
+
+The CodeDrobe theme skill is required for authoring. Launch Deck detects the
+skill and can install it for the current user. Generated packages are stored in
+`%LOCALAPPDATA%\CodexProxyLaunchDeck\themes` and can be applied like marketplace
+themes.
+
+## Using themes with Cockpit Tools
+
+Launch Deck can apply or switch a theme for Codex started by
+[Cockpit Tools](https://github.com/jlcodes99/cockpit-tools). The Codex process
+must be started with a loopback Chromium DevTools port; otherwise CodeDrobe
+cannot attach to its renderer after it is already running.
+
+1. In Cockpit Tools, open **Codex** and select **Application Instances**.
+2. Edit the **Default Instance**.
+3. In **Custom launch arguments**, enter:
+
+   ```text
+   --remote-debugging-port=9335
+   ```
+
+4. Save the instance, fully exit every Codex window/process, then launch the
+   default instance through Cockpit Tools.
+5. Open Launch Deck and select **Apply theme live** to apply or switch themes.
+
+The selected theme's native light/dark base is synchronized automatically; you
+do not need to change Codex appearance settings by hand.
+
+Do not put the argument in Cockpit Tools' **Settings > Codex startup path**:
+that field is only for the executable path. If port `9335` is already in use,
+choose a free port and use the same `--remote-debugging-port=<port>` form;
+Launch Deck detects the port from the launched Codex process.
+
 ## Build
 
 Build the recommended Tauri application:
@@ -75,7 +150,17 @@ Build the recommended Tauri application:
 ```powershell
 cd desktop
 npm ci
+npm run lint
+npm run build
 npm run tauri build
+```
+
+Rust checks:
+
+```powershell
+cd desktop\src-tauri
+cargo test
+cargo clippy --all-targets --all-features -- -D warnings
 ```
 
 Build the legacy .NET Framework launcher:
@@ -98,7 +183,9 @@ requirements.
 
 The launcher does not forward or inspect network traffic. It only checks whether
 the configured proxy endpoint accepts a connection and passes proxy environment
-variables to the new Codex process.
+variables to the new Codex process. A reference image selected for AI theme
+generation is passed only to the explicitly started Codex generation job; Launch
+Deck does not upload it to its own service.
 
 ## License
 

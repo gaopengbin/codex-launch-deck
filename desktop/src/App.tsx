@@ -2,11 +2,12 @@ import { startTransition, useDeferredValue, useEffect, useEffectEvent, useState 
 import { invoke } from '@tauri-apps/api/core'
 import { getCurrentWindow } from '@tauri-apps/api/window'
 import { openUrl } from '@tauri-apps/plugin-opener'
+import { open } from '@tauri-apps/plugin-dialog'
 import mikuHero from './assets/miku-hero.png'
 import './App.css'
 
-type View = 'discover' | 'installed' | 'settings'
-type BusyAction = 'proxy' | 'themes' | 'download' | 'launch' | 'apply' | 'restore' | null
+type View = 'discover' | 'installed' | 'create' | 'settings'
+type BusyAction = 'proxy' | 'themes' | 'download' | 'launch' | 'apply' | 'restore' | 'skill' | null
 
 interface ProxyConfig {
   host: string
@@ -45,6 +46,24 @@ interface Theme {
   likeCount: number
   downloadCount: number
   bundled?: boolean
+  generated?: boolean
+  appearanceMode?: 'light' | 'dark' | null
+}
+
+interface AiThemeCapability {
+  codexCliAvailable: boolean
+  skillInstalled: boolean
+  skillPath?: string | null
+}
+
+interface AiThemeJob {
+  id: string
+  status: 'running' | 'completed' | 'failed'
+  phase: string
+  progress: number
+  logs: string[]
+  error?: string | null
+  theme?: Theme | null
 }
 
 interface MarketplacePage {
@@ -58,6 +77,7 @@ interface AppState {
   codedrobeAvailable: boolean
   cachedThemes: string[]
   cacheDirectory: string
+  themeAppearances: Record<string, 'light' | 'dark'>
 }
 
 interface ActionResult {
@@ -87,6 +107,7 @@ const bundledTheme: Theme = {
   likeCount: 0,
   downloadCount: 0,
   bundled: true,
+  appearanceMode: 'light',
 }
 
 const initialState: AppState = {
@@ -95,6 +116,12 @@ const initialState: AppState = {
   codedrobeAvailable: false,
   cachedThemes: [],
   cacheDirectory: '',
+  themeAppearances: {},
+}
+
+const initialAiCapability: AiThemeCapability = {
+  codexCliAvailable: false,
+  skillInstalled: false,
 }
 
 function Icon({ name }: { name: 'spark' | 'grid' | 'download' | 'settings' | 'search' | 'play' | 'pulse' | 'arrow' | 'refresh' }) {
@@ -122,9 +149,18 @@ function App() {
   const [query, setQuery] = useState('')
   const [sort, setSort] = useState<'downloads' | 'newest' | 'name'>('downloads')
   const [busy, setBusy] = useState<BusyAction>('themes')
+  const [downloadProgress, setDownloadProgress] = useState<number | null>(null)
+  const [aiCapability, setAiCapability] = useState<AiThemeCapability>(initialAiCapability)
+  const [aiPrompt, setAiPrompt] = useState('')
+  const [aiAppearance, setAiAppearance] = useState<'light' | 'dark'>('dark')
+  const [aiVisualMode, setAiVisualMode] = useState<'css' | 'upload' | 'ai'>('css')
+  const [aiImagePath, setAiImagePath] = useState<string | null>(null)
+  const [aiJob, setAiJob] = useState<AiThemeJob | null>(null)
   const [status, setStatus] = useState('正在连接启动台…')
   const [statusTone, setStatusTone] = useState<'idle' | 'success' | 'warning' | 'error'>('idle')
   const deferredQuery = useDeferredValue(query)
+  const aiJobId = aiJob?.id
+  const aiJobStatus = aiJob?.status
 
   const bootstrap = useEffectEvent(async () => {
     try {
@@ -134,7 +170,7 @@ function App() {
       ])
       startTransition(() => {
         setAppState(state)
-        setThemes([bundledTheme, ...page.themes.filter((theme) => theme.slug !== bundledTheme.slug)])
+        setThemes((current) => mergeThemes(current.filter((theme) => theme.generated), page.themes))
       })
       setStatus(`已连接 CodeDrobe 商店，共 ${page.total} 个 Codex 主题`)
       setStatusTone('success')
@@ -149,6 +185,58 @@ function App() {
   useEffect(() => {
     void bootstrap()
   }, [])
+
+  const loadAiState = useEffectEvent(async () => {
+    try {
+      const [generatedThemes, capability] = await Promise.all([
+        invoke<Theme[]>('list_generated_themes'),
+        invoke<AiThemeCapability>('get_ai_theme_capability'),
+      ])
+      setAiCapability(capability)
+      setThemes((current) => mergeThemes(generatedThemes, current.filter((theme) => !theme.bundled && !theme.generated)))
+    } catch {
+      // AI capability errors are surfaced when the user opens or starts creation.
+    }
+  })
+
+  useEffect(() => {
+    void loadAiState()
+  }, [])
+
+  const pollAiThemeJob = useEffectEvent(async (id: string) => {
+    const nextJob = await invoke<AiThemeJob>('get_ai_theme_job', { id })
+    setAiJob(nextJob)
+    if (nextJob.status === 'completed' && nextJob.theme) {
+      setThemes((current) => mergeThemes([nextJob.theme!], current.filter((theme) => !theme.bundled)))
+      setSelectedTheme(nextJob.theme)
+      setAppState(await invoke<AppState>('get_app_state'))
+      setStatus(`AI 主题「${themeName(nextJob.theme)}」已生成并加入“已安装”`)
+      setStatusTone('success')
+    } else if (nextJob.status === 'failed') {
+      setStatus(nextJob.error || 'AI 主题生成失败。')
+      setStatusTone('error')
+    }
+  })
+
+  useEffect(() => {
+    if (!aiJobId || aiJobStatus !== 'running') return
+    const jobId = aiJobId
+    let disposed = false
+    const interval = window.setInterval(async () => {
+      try {
+        if (!disposed) await pollAiThemeJob(jobId)
+      } catch (error) {
+        if (!disposed) {
+          setStatus(formatError(error))
+          setStatusTone('error')
+        }
+      }
+    }, 750)
+    return () => {
+      disposed = true
+      window.clearInterval(interval)
+    }
+  }, [aiJobId, aiJobStatus])
 
   useEffect(() => {
     let disposed = false
@@ -177,7 +265,7 @@ function App() {
     try {
       const page = await invoke<MarketplacePage>('list_themes', { proxy })
       startTransition(() => {
-        setThemes([bundledTheme, ...page.themes.filter((theme) => theme.slug !== bundledTheme.slug)])
+        setThemes((current) => mergeThemes(current.filter((theme) => theme.generated), page.themes))
       })
       setStatus(`主题商店已刷新，共 ${page.total} 个 Codex 主题`)
       setStatusTone('success')
@@ -212,16 +300,46 @@ function App() {
       return
     }
     setBusy('download')
+    setDownloadProgress(8)
     setStatus(`正在安全下载 ${themeName(selectedTheme)}…`)
     setStatusTone('idle')
+    const progressTimer = window.setInterval(() => {
+      setDownloadProgress((current) => {
+        if (current === null) return 8
+        if (current >= 92) return current
+        return Math.min(92, current + Math.max(1, Math.round((92 - current) * 0.08)))
+      })
+    }, 220)
     try {
       const result = await invoke<ActionResult>('download_theme', {
         proxy,
         theme: themeSelection(selectedTheme),
       })
+      setDownloadProgress(96)
       const state = await invoke<AppState>('get_app_state')
       setAppState(state)
+      setDownloadProgress(100)
       setStatus(result.message)
+      setStatusTone('success')
+      await new Promise((resolve) => window.setTimeout(resolve, 320))
+    } catch (error) {
+      setStatus(formatError(error))
+      setStatusTone('error')
+    } finally {
+      window.clearInterval(progressTimer)
+      setBusy(null)
+      setDownloadProgress(null)
+    }
+  }
+
+  async function installAiSkill() {
+    setBusy('skill')
+    setStatus('正在安装 CodeDrobe 主题创作 Skill…')
+    setStatusTone('idle')
+    try {
+      const capability = await invoke<AiThemeCapability>('install_ai_theme_skill')
+      setAiCapability(capability)
+      setStatus('主题创作能力已安装，可以开始生成。')
       setStatusTone('success')
     } catch (error) {
       setStatus(formatError(error))
@@ -229,6 +347,34 @@ function App() {
     } finally {
       setBusy(null)
     }
+  }
+
+  async function generateAiTheme() {
+    setStatus('正在创建 AI 主题任务…')
+    setStatusTone('idle')
+    try {
+      const job = await invoke<AiThemeJob>('start_ai_theme_generation', {
+        request: { prompt: aiPrompt, appearance: aiAppearance, visualMode: aiVisualMode, imagePath: aiImagePath },
+      })
+      setAiJob(job)
+      setStatus('Codex 已开始创作主题，可以在下方查看实时进度。')
+    } catch (error) {
+      setStatus(formatError(error))
+      setStatusTone('error')
+    }
+  }
+
+  async function chooseAiBackground() {
+    const selected = await open({
+      multiple: false,
+      directory: false,
+      filters: [{ name: '背景图片', extensions: ['png', 'jpg', 'jpeg', 'webp', 'gif'] }],
+    })
+    if (typeof selected === 'string') setAiImagePath(selected)
+  }
+
+  function updateProxyPort(nextPort: number) {
+    setProxy({ ...proxy, port: Math.min(65535, Math.max(1, nextPort)) })
   }
 
   async function launch() {
@@ -328,7 +474,7 @@ function App() {
   return (
     <div className="window-shell">
       <TitleBar />
-      <div className="app-frame">
+      <div className={`app-frame ${view === 'create' || view === 'settings' ? 'without-detail' : ''}`}>
       <aside className="sidebar">
         <div className="brand">
           <div className="brand-mark"><span>01</span></div>
@@ -344,6 +490,9 @@ function App() {
           </button>
           <button className={view === 'installed' ? 'active' : ''} onClick={() => setView('installed')}>
             <Icon name="download" /><span>已安装</span><b>{appState.cachedThemes.length + 1}</b>
+          </button>
+          <button className={view === 'create' ? 'active' : ''} onClick={() => setView('create')}>
+            <Icon name="spark" /><span>AI 创作</span>
           </button>
           <button className={view === 'settings' ? 'active' : ''} onClick={() => setView('settings')}>
             <Icon name="settings" /><span>启动设置</span>
@@ -375,10 +524,25 @@ function App() {
               <span>PROXY HOST</span>
               <input value={proxy.host} onChange={(event) => setProxy({ ...proxy, host: event.target.value })} />
             </label>
-            <label className="port-field">
+            <div className="port-field">
               <span>PORT</span>
-              <input type="number" min="1" max="65535" value={proxy.port} onChange={(event) => setProxy({ ...proxy, port: Number(event.target.value) })} />
-            </label>
+              <div className="port-control">
+                <button type="button" onClick={() => updateProxyPort(proxy.port - 1)} aria-label="端口减一">−</button>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  aria-label="代理端口"
+                  value={proxy.port || ''}
+                  onChange={(event) => {
+                    const digits = event.target.value.replace(/\D/g, '').slice(0, 5)
+                    setProxy({ ...proxy, port: digits ? Math.min(65535, Number(digits)) : 0 })
+                  }}
+                  onBlur={() => updateProxyPort(proxy.port || 1)}
+                />
+                <button type="button" onClick={() => updateProxyPort(proxy.port + 1)} aria-label="端口加一">+</button>
+              </div>
+            </div>
             <button className="probe-button" onClick={() => void checkProxy()} disabled={busy !== null}>
               <Icon name="pulse" />检测
             </button>
@@ -402,10 +566,16 @@ function App() {
         <div className={`status-strip ${statusTone}`}>
           <span className="status-light" />
           <p>{status}</p>
-          {busy && <span className="status-progress" />}
+          {busy === 'download' && downloadProgress !== null && <span className="status-percent">{Math.round(downloadProgress)}%</span>}
+          {busy && (
+            <span
+              className={`status-progress ${busy === 'download' ? 'determinate' : ''}`}
+              style={busy === 'download' && downloadProgress !== null ? { width: `${downloadProgress}%` } : undefined}
+            />
+          )}
         </div>
 
-        {view !== 'settings' ? (
+        {(view === 'discover' || view === 'installed') ? (
           <section className="gallery-section">
             <header className="section-header">
               <div>
@@ -432,6 +602,7 @@ function App() {
                   theme={theme}
                   index={index}
                   installed={isInstalled(theme, appState.cachedThemes)}
+                  appearance={themeAppearance(theme, appState.themeAppearances)}
                   selected={selectedTheme.slug === theme.slug}
                   onSelect={() => setSelectedTheme(theme)}
                 />
@@ -445,6 +616,26 @@ function App() {
               )}
             </div>
           </section>
+        ) : view === 'create' ? (
+          <AiCreatePanel
+            capability={aiCapability}
+            prompt={aiPrompt}
+            appearance={aiAppearance}
+            visualMode={aiVisualMode}
+            imagePath={aiImagePath}
+            job={aiJob}
+            installing={busy === 'skill'}
+            onPromptChange={setAiPrompt}
+            onAppearanceChange={setAiAppearance}
+            onVisualModeChange={(mode) => {
+              setAiVisualMode(mode)
+              if (mode !== 'upload') setAiImagePath(null)
+            }}
+            onChooseImage={() => void chooseAiBackground()}
+            onInstall={() => void installAiSkill()}
+            onGenerate={() => void generateAiTheme()}
+            onOpenInstalled={() => setView('installed')}
+          />
         ) : (
           <SettingsPanel
             appState={appState}
@@ -455,7 +646,7 @@ function App() {
         )}
       </main>
 
-      {view !== 'settings' && (
+      {(view === 'discover' || view === 'installed') && (
         <aside className="theme-detail">
           <button className="detail-cover" onClick={() => void cacheSelectedTheme()} disabled={busy !== null}>
             <img src={selectedTheme.coverUrl ?? selectedTheme.previewUrl ?? ''} alt="" onError={hideBrokenImage} />
@@ -471,8 +662,25 @@ function App() {
               {!selectedTheme.bundled && <span><b>{selectedTheme.downloadCount}</b> DOWNLOADS</span>}
             </div>
             <div className="tag-row">
+              <span>{themeAppearance(selectedTheme, appState.themeAppearances) === 'dark' ? '深色基底' : themeAppearance(selectedTheme, appState.themeAppearances) === 'light' ? '浅色基底' : '基底待识别'}</span>
               {selectedTheme.categories.slice(0, 3).map((category) => <span key={category.slug}>{category.name.zh || category.slug}</span>)}
             </div>
+            {busy === 'download' && downloadProgress !== null && (
+              <div
+                className="download-progress"
+                role="progressbar"
+                aria-label={`正在下载并校验 ${themeName(selectedTheme)}`}
+                aria-valuemin={0}
+                aria-valuemax={100}
+                aria-valuenow={Math.round(downloadProgress)}
+              >
+                <div className="download-progress-copy">
+                  <span>下载与安全校验</span>
+                  <b>{Math.round(downloadProgress)}%</b>
+                </div>
+                <div className="download-progress-track"><i style={{ width: `${downloadProgress}%` }} /></div>
+              </div>
+            )}
             <button
               className="select-launch"
               onClick={() => {
@@ -521,13 +729,14 @@ function TitleBar() {
   )
 }
 
-function ThemeCard({ theme, index, installed, selected, onSelect }: { theme: Theme; index: number; installed: boolean; selected: boolean; onSelect: () => void }) {
+function ThemeCard({ theme, index, installed, appearance, selected, onSelect }: { theme: Theme; index: number; installed: boolean; appearance?: 'light' | 'dark'; selected: boolean; onSelect: () => void }) {
   return (
     <button className={`theme-card ${selected ? 'selected' : ''}`} style={{ '--delay': `${Math.min(index, 12) * 35}ms` } as React.CSSProperties} onClick={onSelect}>
       <div className="card-art">
         <img src={theme.coverUrl ?? theme.previewUrl ?? ''} alt="" loading="lazy" onError={hideBrokenImage} />
         <span className="card-number">{String(index + 1).padStart(2, '0')}</span>
         {installed && <span className="installed-pill">LOCAL</span>}
+        <span className={`appearance-pill ${appearance || 'unknown'}`}>{appearance === 'dark' ? 'DARK' : appearance === 'light' ? 'LIGHT' : 'MODE ?'}</span>
       </div>
       <div className="card-copy">
         <div>
@@ -542,6 +751,117 @@ function ThemeCard({ theme, index, installed, selected, onSelect }: { theme: The
 
 function StatusRow({ label, ok, running = false }: { label: string; ok: boolean; running?: boolean }) {
   return <div className="system-row"><span>{label}</span><i className={ok ? (running ? 'running' : 'ok') : ''}>{ok ? (running ? 'RUNNING' : 'READY') : 'CHECK'}</i></div>
+}
+
+function AiCreatePanel({ capability, prompt, appearance, visualMode, imagePath, job, installing, onPromptChange, onAppearanceChange, onVisualModeChange, onChooseImage, onInstall, onGenerate, onOpenInstalled }: {
+  capability: AiThemeCapability
+  prompt: string
+  appearance: 'light' | 'dark'
+  visualMode: 'css' | 'upload' | 'ai'
+  imagePath: string | null
+  job: AiThemeJob | null
+  installing: boolean
+  onPromptChange: (value: string) => void
+  onAppearanceChange: (value: 'light' | 'dark') => void
+  onVisualModeChange: (value: 'css' | 'upload' | 'ai') => void
+  onChooseImage: () => void
+  onInstall: () => void
+  onGenerate: () => void
+  onOpenInstalled: () => void
+}) {
+  const ready = capability.codexCliAvailable && capability.skillInstalled
+  const running = job?.status === 'running'
+  return (
+    <section className="ai-create-panel">
+      <header className="ai-create-header">
+        <div>
+          <span className="section-kicker">CREATE WITH LOCAL CODEX</span>
+          <h2>用一句描述，创作你的 Codex 主题</h2>
+          <p>直接调用你已登录的本机 Codex，不需要配置 API Key。生成过程运行在独立沙箱中，完成后自动校验并加入主题库。</p>
+        </div>
+        <div className="ai-capability-card">
+          <StatusRow label="Codex CLI" ok={capability.codexCliAvailable} />
+          <StatusRow label="主题创作 Skill" ok={capability.skillInstalled} />
+          {!capability.skillInstalled && (
+            <button onClick={onInstall} disabled={installing || !capability.codexCliAvailable}>
+              <Icon name="download" />{installing ? '正在安装…' : '一键安装主题能力'}
+            </button>
+          )}
+        </div>
+      </header>
+
+      <div className="ai-workbench">
+        <div className="ai-prompt-card">
+          <label htmlFor="ai-theme-prompt">你想要什么样的主题？</label>
+          <div className="appearance-choice" aria-label="Codex 主题基底">
+            <span>适配基底</span>
+            <div>
+              <button className={appearance === 'dark' ? 'active' : ''} onClick={() => onAppearanceChange('dark')} disabled={running}>
+                <i className="dark-swatch" />深色主题
+              </button>
+              <button className={appearance === 'light' ? 'active' : ''} onClick={() => onAppearanceChange('light')} disabled={running}>
+                <i className="light-swatch" />浅色主题
+              </button>
+            </div>
+          </div>
+          <div className="visual-mode-choice" aria-label="主题背景素材">
+            <span>背景素材</span>
+            <div>
+              <button className={visualMode === 'css' ? 'active' : ''} onClick={() => onVisualModeChange('css')} disabled={running}>纯 CSS</button>
+              <button className={visualMode === 'upload' ? 'active' : ''} onClick={() => onVisualModeChange('upload')} disabled={running}>上传参考图</button>
+              <button className={visualMode === 'ai' ? 'active' : ''} onClick={() => onVisualModeChange('ai')} disabled={running}>AI 生成图</button>
+            </div>
+          </div>
+          {visualMode === 'upload' && (
+            <button className="image-picker" onClick={onChooseImage} disabled={running}>
+              <Icon name="download" />
+              <span>{imagePath ? imagePath.split(/[\\/]/).pop() : '选择参考图 PNG / JPG / WebP / GIF'}</span>
+            </button>
+          )}
+          {visualMode === 'upload' && imagePath && <p className="visual-mode-note">AI 会提取至少 5 个参考图锚点，生成后复核并保留至少 3 个，同时检查图片是否匹配浅色/深色基底；不会直接打包原图。</p>}
+          {visualMode === 'ai' && <p className="visual-mode-note">Codex 会生成 16:9 主背景，按风格决定是否补充纹理素材，并用 CSS 完成卡片、控件与装饰细节。</p>}
+          <textarea
+            id="ai-theme-prompt"
+            value={prompt}
+            maxLength={4000}
+            onChange={(event) => onPromptChange(event.target.value)}
+            placeholder="例如：做一个深海夜航风格的深色主题，主色是墨蓝和荧光青，卡片像半透明潜艇舷窗，文字清晰克制，不要大面积高饱和色。"
+          />
+          <div className="ai-prompt-foot">
+            <span>{prompt.length} / 4000</span>
+            <button onClick={onGenerate} disabled={!ready || running || prompt.trim().length < 8 || (visualMode === 'upload' && !imagePath)}>
+              <Icon name="spark" />{running ? 'Codex 正在创作…' : '开始 AI 创作'}
+            </button>
+          </div>
+          {!ready && <p className="ai-hint">首次使用需要 Codex CLI 和 CodeDrobe 主题创作 Skill 均为 READY。</p>}
+          {ready && <p className="ai-hint">生成包会锁定为{appearance === 'dark' ? '深色' : '浅色'}基底；应用时 CodeDrobe 会同步切换 Codex 原生外观。</p>}
+        </div>
+
+        <div className={`ai-job-card ${job?.status || 'idle'}`}>
+          <div className="ai-job-head">
+            <div>
+              <span>GENERATION STATUS</span>
+              <h3>{job?.phase || '等待创作任务'}</h3>
+            </div>
+            <b>{job ? `${job.progress}%` : 'IDLE'}</b>
+          </div>
+          <div className="ai-progress-track"><i style={{ width: `${job?.progress || 0}%` }} /></div>
+          <div className="ai-log" aria-live="polite">
+            {job ? job.logs.slice(-8).map((line, index) => <p key={`${index}-${line}`}>{line}</p>) : (
+              <p>写下颜色、氛围、材质和布局偏好，Codex 会生成主视觉、可选纹理和完整的界面细节。</p>
+            )}
+          </div>
+          {job?.status === 'completed' && (
+            <button className="ai-installed-button" onClick={onOpenInstalled}>
+              查看并应用生成的主题 <Icon name="arrow" />
+            </button>
+          )}
+          {job?.status === 'failed' && <p className="ai-error">{job.error}</p>}
+        </div>
+      </div>
+      <p className="ai-safety-note">生成会使用你的 Codex 账户额度。Launch Deck 不会读取或保存 Codex 凭据，也不会在生成期间重启正在运行的 Codex。</p>
+    </section>
+  )
 }
 
 function SettingsPanel({ appState, busy, onRestore, onOpenStore }: { appState: AppState; busy: BusyAction; onRestore: () => void; onOpenStore: () => void }) {
@@ -586,6 +906,22 @@ function themeSelection(theme: Theme) {
 
 function isInstalled(theme: Theme, cachedThemes: string[]) {
   return Boolean(theme.bundled) || cachedThemes.some((file) => file.startsWith(`${theme.slug}-${theme.version}`))
+}
+
+function themeAppearance(theme: Theme, appearances: AppState['themeAppearances']) {
+  return theme.appearanceMode || appearances[`${theme.slug}@${theme.version}`]
+}
+
+function mergeThemes(generatedThemes: Theme[], marketplaceThemes: Theme[]) {
+  const seen = new Set<string>([`${bundledTheme.slug}@${bundledTheme.version}`])
+  const merged = [bundledTheme]
+  for (const theme of [...generatedThemes, ...marketplaceThemes]) {
+    const key = `${theme.slug}@${theme.version}`
+    if (seen.has(key)) continue
+    seen.add(key)
+    merged.push(theme)
+  }
+  return merged
 }
 
 function formatError(error: unknown) {
