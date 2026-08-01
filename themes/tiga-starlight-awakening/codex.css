@@ -1,0 +1,406 @@
+:root.codedrobe-host-codex {
+  color-scheme: dark !important;
+  --kuuga-void: #03060b;
+  --kuuga-bg: #070b12;
+  --kuuga-surface: rgba(10, 17, 28, 0.9);
+  --kuuga-surface-soft: rgba(16, 28, 44, 0.78);
+  --kuuga-surface-strong: rgba(6, 12, 21, 0.96);
+  --kuuga-sidebar: rgba(5, 10, 18, 0.96);
+  --kuuga-text: #eaf5fa;
+  --kuuga-muted: #aabdc9;
+  --kuuga-faint: #718592;
+  --kuuga-red: #3ebee9;
+  --kuuga-red-bright: #7fe5ff;
+  --kuuga-red-soft: rgba(62, 190, 233, 0.18);
+  --kuuga-gold: #c7ad77;
+  --kuuga-gold-soft: rgba(199, 173, 119, 0.15);
+  --kuuga-border: rgba(153, 201, 224, 0.22);
+  --kuuga-border-red: rgba(91, 211, 247, 0.38);
+  --kuuga-shadow: rgba(0, 3, 10, 0.66);
+  --theme-bg: var(--kuuga-bg);
+  --theme-surface: var(--kuuga-surface);
+  --theme-surface-soft: var(--kuuga-surface-soft);
+  --theme-surface-strong: var(--kuuga-surface-strong);
+  --theme-sidebar: var(--kuuga-sidebar);
+  --theme-text: var(--kuuga-text);
+  --theme-muted: var(--kuuga-muted);
+  --theme-accent: var(--kuuga-red);
+  --theme-accent-soft: var(--kuuga-red-soft);
+  --theme-border: var(--kuuga-border);
+  --theme-shadow: var(--kuuga-shadow);
+
+  --color-token-bg-primary: var(--kuuga-bg) !important;
+  --color-token-bg-secondary: var(--kuuga-surface) !important;
+  --color-token-bg-tertiary: var(--kuuga-surface-soft) !important;
+  --color-token-main-surface-primary: var(--kuuga-surface) !important;
+  --color-token-side-bar-background: var(--kuuga-sidebar) !important;
+  --color-token-foreground: var(--kuuga-text) !important;
+  --color-token-text-primary: var(--kuuga-text) !important;
+  --color-token-text-secondary: var(--kuuga-muted) !important;
+  --color-token-text-tertiary: var(--kuuga-faint) !important;
+  --color-token-description-foreground: var(--kuuga-muted) !important;
+  --color-token-icon-foreground: var(--kuuga-text) !important;
+  --color-token-border: var(--kuuga-border) !important;
+  --color-token-border-default: var(--kuuga-border) !important;
+  --color-token-border-heavy: rgba(153, 201, 224, 0.36) !important;
+  --color-token-input-background: var(--kuuga-surface-strong) !important;
+  --color-token-input-border: var(--kuuga-border-red) !important;
+  --color-token-list-hover-background: var(--kuuga-red-soft) !important;
+  --color-token-list-active-selection-background: rgba(42, 154, 207, 0.3) !important;
+  --color-token-toolbar-hover-background: var(--kuuga-red-soft) !important;
+  --color-token-link: #8de7ff !important;
+  --color-token-primary: var(--kuuga-red-bright) !important;
+  --color-token-focus-border: rgba(127, 229, 255, 0.78) !important;
+  --color-token-dropdown-background: rgba(18, 14, 15, 0.97) !important;
+  --color-token-dropdown-foreground: var(--kuuga-text) !important;
+  --color-token-menu-background: rgba(18, 14, 15, 0.97) !important;
+  --color-token-menu-border: var(--kuuga-border) !important;
+  --color-token-conversation-summary-leading: var(--kuuga-muted) !important;
+  --color-token-conversation-summary-trailing: var(--kuuga-muted) !important;
+}
+
+html.codedrobe-host-codex body {
+  background:
+    radial-gradient(circle at 82% 28%, rgba(39, 145, 207, 0.2), transparent 31%),
+    linear-gradient(145deg, #03060b 0%, #07101c 52%, #0a1726 100%) !important;
+  color: var(--kuuga-text) !important;
+  font-family: "Segoe UI Variable", "Microsoft YaHei UI", sans-serif !important;
+}
+
+#codedrobe-codex-skin-chrome {
+  position: fixed;
+  z-index: 31;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+#codedrobe-codex-skin-chrome :is(.dream-brand, .dream-signature, .dream-polaroid, .dream-ribbon) {
+  display: none !important;
+}
+
+html.codedrobe-host-codex aside.app-shell-left-panel {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 76% 17%, rgba(82, 209, 248, 0.15), transparent 25%),
+    linear-gradient(180deg, rgba(9, 19, 31, 0.94), rgba(4, 8, 15, 0.99)) !important;
+  border-right: 1px solid var(--kuuga-border) !important;
+  box-shadow: 12px 0 40px rgba(0, 0, 0, 0.34) !important;
+  color: var(--kuuga-text) !important;
+  backdrop-filter: blur(20px) saturate(1.08);
+}
+
+html.codedrobe-host-codex aside.app-shell-left-panel::before {
+  position: absolute;
+  z-index: 0;
+  inset: 36px 0 0;
+  content: "";
+  pointer-events: none;
+  background:
+    linear-gradient(180deg, rgba(4, 9, 16, 0.2), rgba(4, 9, 16, 0.62) 50%, rgba(4, 8, 15, 0.98) 90%),
+    linear-gradient(90deg, rgba(4, 9, 16, 0.12), rgba(4, 9, 16, 0.48)),
+    var(--codedrobe-image-sidebar) 27% top / auto 100% no-repeat;
+  opacity: 0.55;
+  filter: saturate(0.82) contrast(1.08);
+  -webkit-mask-image: linear-gradient(180deg, transparent 0, #000 10%, #000 76%, transparent 100%);
+  mask-image: linear-gradient(180deg, transparent 0, #000 10%, #000 76%, transparent 100%);
+}
+
+html.codedrobe-host-codex aside.app-shell-left-panel::after {
+  position: absolute;
+  z-index: 2;
+  top: 64px;
+  right: -1px;
+  bottom: 28px;
+  width: 1px;
+  content: "";
+  pointer-events: none;
+  background: linear-gradient(transparent, var(--kuuga-gold), var(--kuuga-red-bright), transparent);
+  opacity: 0.62;
+}
+
+html.codedrobe-host-codex aside.app-shell-left-panel :is(a, button, [role="button"]) {
+  border-radius: 8px !important;
+  color: var(--kuuga-text) !important;
+  transition: background-color 160ms ease, color 160ms ease, box-shadow 160ms ease !important;
+}
+
+html.codedrobe-host-codex aside.app-shell-left-panel :is(a, button, [role="button"]):hover {
+  background: linear-gradient(90deg, rgba(62, 190, 233, 0.2), rgba(199, 173, 119, 0.06)) !important;
+  color: #f7fcff !important;
+}
+
+html.codedrobe-host-codex aside.app-shell-left-panel :is([aria-current="page"], [aria-selected="true"], .sidebar-item.bg-token-list-active-selection-background) {
+  background: linear-gradient(90deg, rgba(42, 154, 207, 0.34), rgba(18, 37, 57, 0.46)) !important;
+  box-shadow: inset 3px 0 0 var(--kuuga-red-bright), inset 0 0 0 1px rgba(153, 201, 224, 0.16) !important;
+}
+
+html.codedrobe-host-codex :is(main.main-surface, #root main) {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  border-color: var(--kuuga-border) !important;
+  background-color: var(--kuuga-bg) !important;
+  background-image:
+    linear-gradient(90deg, rgba(3, 7, 13, 0.99) 0%, rgba(5, 11, 19, 0.96) 43%, rgba(7, 17, 29, 0.73) 74%, rgba(7, 18, 31, 0.48) 100%),
+    linear-gradient(180deg, rgba(0, 0, 0, 0.1), rgba(3, 8, 15, 0.62)) !important;
+  background-repeat: no-repeat !important;
+  background-position: center !important;
+  background-size: 100% 100% !important;
+  box-shadow: inset 24px 0 70px rgba(0, 0, 0, 0.2) !important;
+}
+
+html.codedrobe-host-codex :is(main.main-surface, #root main)::before {
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  content: "";
+  pointer-events: none;
+  background-image:
+    linear-gradient(90deg, rgba(3, 7, 13, 0.86) 0%, rgba(4, 9, 16, 0.64) 46%, rgba(5, 13, 23, 0.2) 74%, rgba(4, 12, 22, 0.08) 100%),
+    linear-gradient(180deg, rgba(0, 0, 0, 0.03), rgba(3, 8, 15, 0.4)),
+    var(--codedrobe-image-hero);
+  background-repeat: no-repeat;
+  background-position: center, center, right clamp(-220px, -11vw, -145px) center;
+  background-size: 100% 100%, 100% 100%, auto 100%;
+  opacity: 0.62;
+  filter: saturate(0.95) contrast(1.04);
+}
+
+html.codedrobe-host-codex :is(main.main-surface, #root main)::after {
+  position: absolute;
+  z-index: -1;
+  inset: 46px 0 0;
+  content: "";
+  pointer-events: none;
+  background:
+    radial-gradient(circle at calc(100% - 46px) 46px, rgba(127, 229, 255, 0.42) 0 2px, rgba(199, 173, 119, 0.2) 3px 8px, transparent 9px),
+    linear-gradient(90deg, rgba(155, 213, 239, 0.3), transparent 18%) left 24px top 22px / 240px 1px no-repeat,
+    linear-gradient(180deg, rgba(155, 213, 239, 0.24), transparent 24%) left 24px top 22px / 1px 190px no-repeat,
+    radial-gradient(circle, rgba(127, 229, 255, 0.17) 0 1px, transparent 1.5px) 0 0 / 46px 46px,
+    repeating-linear-gradient(135deg, transparent 0 16px, rgba(62, 190, 233, 0.025) 17px 18px, transparent 19px 34px);
+  opacity: 0.78;
+}
+
+html.codedrobe-host-codex :is(main.main-surface, #root main) > header,
+html.codedrobe-host-codex header.app-header-tint {
+  background: rgba(5, 11, 19, 0.8) !important;
+  border-bottom: 1px solid var(--kuuga-border) !important;
+  color: var(--kuuga-text) !important;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.16) !important;
+  backdrop-filter: blur(22px) saturate(1.12);
+}
+
+html.codedrobe-host-codex main.main-surface > header.app-header-tint > div.flex-1.isolate::before {
+  position: absolute;
+  z-index: 2;
+  top: 7px;
+  left: 50%;
+  height: 30px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 18px;
+  border: 1px solid rgba(153, 201, 224, 0.34);
+  border-radius: 999px;
+  content: "✦  TIGA · STARLIGHT AWAKENING  ✦";
+  pointer-events: none;
+  color: #dff8ff;
+  background:
+    linear-gradient(135deg, rgba(8, 16, 27, 0.97), rgba(19, 67, 96, 0.9), rgba(8, 15, 25, 0.97));
+  box-shadow:
+    0 7px 22px rgba(0, 0, 0, 0.36),
+    inset 0 0 0 1px rgba(127, 229, 255, 0.15),
+    0 0 22px rgba(62, 190, 233, 0.12);
+  font: 700 11px/1 "Segoe UI Variable", "Microsoft YaHei UI", sans-serif;
+  letter-spacing: 0.14em;
+  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.72);
+  transform: translateX(-50%);
+}
+
+html.codedrobe-host-codex [role="main"] {
+  background: transparent !important;
+  color: var(--kuuga-text) !important;
+}
+
+html.codedrobe-host-codex main.main-surface.dream-home-shell {
+  background-image:
+    linear-gradient(90deg, rgba(3, 7, 13, 0.97) 0%, rgba(5, 11, 19, 0.88) 42%, rgba(7, 18, 31, 0.34) 73%, rgba(7, 18, 31, 0.2) 100%),
+    linear-gradient(180deg, transparent 55%, rgba(3, 8, 15, 0.72)) !important;
+}
+
+html.codedrobe-host-codex main.main-surface.dream-home-shell::before {
+  background-position: center, center, right clamp(-145px, -7vw, -90px) center;
+  background-size: 100% 100%, 100% 100%, auto 102%;
+  opacity: 0.82;
+}
+
+html.codedrobe-host-codex .group\/home-suggestions > * {
+  border: 1px solid var(--kuuga-border) !important;
+  border-radius: 14px !important;
+  background: linear-gradient(145deg, rgba(24, 18, 19, 0.88), rgba(12, 10, 11, 0.9)) !important;
+  color: var(--kuuga-text) !important;
+  box-shadow: 0 14px 30px rgba(0, 0, 0, 0.3) !important;
+  backdrop-filter: blur(18px);
+}
+
+html.codedrobe-host-codex .group\/home-suggestions > *:hover {
+  border-color: rgba(127, 229, 255, 0.54) !important;
+  box-shadow: 0 16px 34px rgba(0, 0, 0, 0.36), inset 0 0 0 1px rgba(153, 201, 224, 0.14) !important;
+}
+
+html.codedrobe-host-codex .composer-surface-chrome {
+  position: relative;
+  overflow: visible !important;
+  border: 1px solid var(--kuuga-border-red) !important;
+  border-radius: 16px !important;
+  background:
+    linear-gradient(145deg, rgba(12, 25, 40, 0.95), rgba(5, 10, 18, 0.97)) !important;
+  color: var(--kuuga-text) !important;
+  box-shadow: 0 18px 46px rgba(0, 0, 0, 0.48), inset 0 1px 0 rgba(153, 201, 224, 0.12) !important;
+  backdrop-filter: blur(24px) saturate(1.12);
+}
+
+html.codedrobe-host-codex .composer-surface-chrome::before {
+  position: absolute;
+  z-index: 4;
+  top: -17px;
+  left: -16px;
+  width: 50px;
+  height: 50px;
+  content: "";
+  pointer-events: none;
+  background: var(--codedrobe-image-emblem) center / contain no-repeat;
+  filter:
+    drop-shadow(0 0 1px rgba(231, 249, 255, 0.86))
+    drop-shadow(0 6px 8px rgba(0, 0, 0, 0.72))
+    drop-shadow(0 0 10px rgba(62, 190, 233, 0.5));
+}
+
+html.codedrobe-host-codex .composer-surface-chrome:focus-within {
+  border-color: rgba(127, 229, 255, 0.72) !important;
+  box-shadow: 0 20px 52px rgba(0, 0, 0, 0.52), 0 0 0 1px rgba(62, 190, 233, 0.24), inset 0 1px 0 rgba(153, 201, 224, 0.16) !important;
+}
+
+html.codedrobe-host-codex .composer-surface-chrome :is(textarea, .ProseMirror, [contenteditable="true"]) {
+  color: var(--kuuga-text) !important;
+  caret-color: var(--kuuga-red-bright) !important;
+}
+
+html.codedrobe-host-codex .composer-surface-chrome :is(button, [role="button"]):hover {
+  background: var(--kuuga-red-soft) !important;
+  color: #f4fcff !important;
+}
+
+html.codedrobe-host-codex :is(article, [data-message-author-role]) {
+  color: var(--kuuga-text) !important;
+}
+
+html.codedrobe-host-codex :is(pre, table, blockquote) {
+  border: 1px solid var(--kuuga-border) !important;
+  border-radius: 10px !important;
+  background: rgba(5, 11, 19, 0.92) !important;
+  color: var(--kuuga-text) !important;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.3) !important;
+}
+
+html.codedrobe-host-codex pre {
+  overflow: auto !important;
+  box-shadow: inset 3px 0 0 rgba(62, 190, 233, 0.66), 0 10px 28px rgba(0, 0, 0, 0.3) !important;
+}
+
+html.codedrobe-host-codex :is(a, button, input, textarea, [contenteditable="true"]) {
+  accent-color: var(--kuuga-red);
+}
+
+html.codedrobe-host-codex a {
+  color: #8de7ff !important;
+  text-decoration-color: rgba(141, 231, 255, 0.46) !important;
+}
+
+html.codedrobe-host-codex :is(button, [role="button"]):focus-visible,
+html.codedrobe-host-codex :is(a, input, textarea, [contenteditable="true"]):focus-visible {
+  outline: 2px solid rgba(127, 229, 255, 0.78) !important;
+  outline-offset: 2px !important;
+}
+
+html.codedrobe-host-codex .top-\(--thread-floating-content-top-inset\) .bg-token-dropdown-background {
+  border: 1px solid var(--kuuga-border) !important;
+  background:
+    linear-gradient(160deg, rgba(15, 29, 45, 0.97), rgba(5, 10, 18, 0.99)) !important;
+  color: var(--kuuga-text) !important;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.56), inset 0 1px 0 rgba(153, 201, 224, 0.12) !important;
+  backdrop-filter: blur(24px) saturate(1.08);
+}
+
+html.codedrobe-host-codex .group\/summary-panel-item {
+  color: var(--kuuga-text) !important;
+}
+
+html.codedrobe-host-codex [data-radix-popper-content-wrapper] > [data-side],
+html.codedrobe-host-codex :is([role="tooltip"], [role="menu"], [role="listbox"]) {
+  border: 1px solid var(--kuuga-border) !important;
+  background: rgba(7, 14, 24, 0.98) !important;
+  color: var(--kuuga-text) !important;
+  box-shadow: 0 18px 46px rgba(0, 0, 0, 0.58) !important;
+  backdrop-filter: blur(20px) saturate(1.08);
+}
+
+html.codedrobe-host-codex :is([role="menuitem"], [role="option"]):is(:hover, [data-highlighted]) {
+  background: linear-gradient(90deg, var(--kuuga-red-soft), var(--kuuga-gold-soft)) !important;
+  color: #f4fcff !important;
+}
+
+html.codedrobe-host-codex [role="dialog"] {
+  border: 1px solid var(--kuuga-border) !important;
+  background: linear-gradient(155deg, rgba(15, 29, 45, 0.98), rgba(4, 9, 16, 0.99)) !important;
+  color: var(--kuuga-text) !important;
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.68) !important;
+}
+
+html.codedrobe-host-codex * {
+  scrollbar-color: rgba(62, 190, 233, 0.58) rgba(4, 9, 16, 0.48);
+}
+
+@media (max-width: 980px) {
+  html.codedrobe-host-codex :is(main.main-surface, #root main)::before {
+    background-position: center, center, right -125px center;
+    background-image:
+      linear-gradient(90deg, rgba(8, 7, 8, 0.95), rgba(10, 8, 9, 0.48)),
+      linear-gradient(180deg, rgba(0, 0, 0, 0.2), rgba(8, 5, 6, 0.65)),
+      var(--codedrobe-image-hero);
+    opacity: 0.28;
+  }
+
+  html.codedrobe-host-codex main.main-surface.dream-home-shell::before {
+    background-position: center, center, right -85px center;
+    opacity: 0.68;
+  }
+}
+
+@media (max-width: 760px) {
+  html.codedrobe-host-codex :is(main.main-surface, #root main)::before {
+    background-position: center, center, right -72px center;
+    background-image:
+      linear-gradient(rgba(8, 7, 8, 0.7), rgba(8, 7, 8, 0.82)),
+      linear-gradient(180deg, transparent, rgba(8, 5, 6, 0.72)),
+      var(--codedrobe-image-hero);
+    opacity: 0.2;
+  }
+
+  html.codedrobe-host-codex main.main-surface.dream-home-shell::before {
+    background-position: center, center, right -48px center;
+    opacity: 0.42;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html.codedrobe-host-codex *,
+  html.codedrobe-host-codex *::before,
+  html.codedrobe-host-codex *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

@@ -4,6 +4,9 @@ import { getCurrentWindow } from '@tauri-apps/api/window'
 import { openUrl } from '@tauri-apps/plugin-opener'
 import { open } from '@tauri-apps/plugin-dialog'
 import mikuHero from './assets/miku-hero.png'
+import kuugaHero from './assets/kuuga-hero.png'
+import tigaHero from './assets/tiga-hero.webp'
+import launchDeckIcon from './assets/launch-deck-icon.png'
 import './App.css'
 
 type View = 'discover' | 'installed' | 'create' | 'settings'
@@ -106,7 +109,7 @@ interface ThemePublishResult {
   status?: string | null
 }
 
-const bundledTheme: Theme = {
+const bundledThemes: Theme[] = [{
   id: 'bundled-miku',
   slug: 'miku-future-beats',
   name: {
@@ -128,7 +131,53 @@ const bundledTheme: Theme = {
   downloadCount: 0,
   bundled: true,
   appearanceMode: 'light',
-}
+}, {
+  id: 'bundled-kuuga',
+  slug: 'kuuga-crimson-awakening',
+  name: {
+    zh: '空我 · 赤焰觉醒',
+    en: 'Kuuga · Crimson Awakening',
+  },
+  version: '1.2.0',
+  description: {
+    zh: '烟黑金属、深绯装甲与克制旧金高光构成的电影感暗色工作台。',
+    en: 'A cinematic dark workstation forged from smoke-black metal, crimson armor, and restrained antique-gold highlights.',
+  },
+  categories: [{ slug: 'character', name: { zh: '角色主题', en: 'Character' }, primary: true }],
+  previewUrl: kuugaHero,
+  coverUrl: kuugaHero,
+  publishedAt: '',
+  supportedApps: ['codex'],
+  author: { handle: 'local', displayName: 'Launch Deck' },
+  likeCount: 0,
+  downloadCount: 0,
+  bundled: true,
+  appearanceMode: 'dark',
+}, {
+  id: 'bundled-tiga',
+  slug: 'tiga-starlight-awakening',
+  name: {
+    zh: '迪迦 · 星辉觉醒',
+    en: 'Tiga · Starlight Awakening',
+  },
+  version: '1.1.2',
+  description: {
+    zh: '经典银色装甲、午夜城市与冰蓝能量核心构成的电影感暗色工作台。',
+    en: 'A cinematic night-city workstation shaped by classic silver armor, midnight haze, and an icy-cyan energy core.',
+  },
+  categories: [{ slug: 'character', name: { zh: '角色主题', en: 'Character' }, primary: true }],
+  previewUrl: tigaHero,
+  coverUrl: tigaHero,
+  publishedAt: '',
+  supportedApps: ['codex'],
+  author: { handle: 'local', displayName: 'Launch Deck' },
+  likeCount: 0,
+  downloadCount: 0,
+  bundled: true,
+  appearanceMode: 'dark',
+}]
+
+const defaultTheme = bundledThemes[0]
 
 const initialState: AppState = {
   codexInstalled: false,
@@ -169,8 +218,8 @@ function App() {
   const [view, setView] = useState<View>('discover')
   const [proxy, setProxy] = useState<ProxyConfig>({ host: '127.0.0.1', port: 10808 })
   const [appState, setAppState] = useState<AppState>(initialState)
-  const [themes, setThemes] = useState<Theme[]>([bundledTheme])
-  const [selectedTheme, setSelectedTheme] = useState<Theme>(bundledTheme)
+  const [themes, setThemes] = useState<Theme[]>(bundledThemes)
+  const [selectedTheme, setSelectedTheme] = useState<Theme>(defaultTheme)
   const [themeEnabled, setThemeEnabled] = useState(true)
   const [query, setQuery] = useState('')
   const [sort, setSort] = useState<'downloads' | 'newest' | 'name'>('downloads')
@@ -359,7 +408,7 @@ function App() {
 
   async function cacheSelectedTheme() {
     if (selectedTheme.bundled) {
-      setStatus('初音未来主题已随启动器内置，无需下载')
+      setStatus(`${themeName(selectedTheme)} 已随启动器内置，无需下载`)
       setStatusTone('success')
       return
     }
@@ -624,7 +673,7 @@ function App() {
       <div className={`app-frame ${view === 'create' || view === 'settings' ? 'without-detail' : ''}`}>
       <aside className="sidebar">
         <div className="brand">
-          <div className="brand-mark"><span>01</span></div>
+          <div className="brand-mark"><img src={launchDeckIcon} alt="" /></div>
           <div>
             <strong>LAUNCH DECK</strong>
             <small>Codex Proxy Studio</small>
@@ -636,7 +685,7 @@ function App() {
             <Icon name="grid" /><span>主题画廊</span><b>{themes.length}</b>
           </button>
           <button className={view === 'installed' ? 'active' : ''} onClick={() => setView('installed')}>
-            <Icon name="download" /><span>已安装</span><b>{appState.cachedThemes.length + 1}</b>
+            <Icon name="download" /><span>已安装</span><b>{appState.cachedThemes.length + bundledThemes.length}</b>
           </button>
           <button className={view === 'create' ? 'active' : ''} onClick={() => setView('create')}>
             <Icon name="spark" /><span>AI 创作</span>
@@ -949,7 +998,7 @@ function TitleBar() {
     >
       <div className="titlebar-drag-zone">
         <div className="titlebar-brand">
-          <span>01</span>
+          <img src={launchDeckIcon} alt="" />
           <strong>Codex Proxy Launch Deck</strong>
           <i>LOCAL</i>
         </div>
@@ -1149,8 +1198,8 @@ function themeAppearance(theme: Theme, appearances: AppState['themeAppearances']
 function mergeThemes(generatedThemes: Theme[], marketplaceThemes: Theme[]) {
   // A slug is the stable theme identity. Prefer offline/generated copies over
   // marketplace versions so one theme never renders as multiple cards.
-  const seen = new Set<string>([bundledTheme.slug])
-  const merged = [bundledTheme]
+  const seen = new Set<string>(bundledThemes.map((theme) => theme.slug))
+  const merged = [...bundledThemes]
   for (const theme of [...generatedThemes, ...marketplaceThemes]) {
     if (seen.has(theme.slug)) continue
     seen.add(theme.slug)

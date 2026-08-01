@@ -1,7 +1,7 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "Codex Proxy Launch Deck",
-  "version": "2.1.3",
+  "version": "2.2.0",
   "identifier": "dev.geod.codex-launch-deck",
   "build": {
     "frontendDist": "../dist",
@@ -33,6 +33,8 @@
     "targets": ["nsis", "msi"],
     "resources": {
       "../../themes/miku-future-beats-1.2.2.codedrobe-theme": "themes/miku-future-beats-1.2.2.codedrobe-theme",
+      "../../themes/kuuga-crimson-awakening-1.2.0.codedrobe-theme": "themes/kuuga-crimson-awakening-1.2.0.codedrobe-theme",
+      "../../themes/tiga-starlight-awakening-1.1.2.codedrobe-theme": "themes/tiga-starlight-awakening-1.1.2.codedrobe-theme",
       "../../compat/codedrobe-core-0.7.0-beta.0.tgz": "compat/codedrobe-core-0.7.0-beta.0.tgz"
     },
     "icon": [

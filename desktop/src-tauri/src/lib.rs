@@ -25,7 +25,23 @@ use std::os::windows::process::CommandExt;
 
 const CODEDROBE_BASE: &str = "https://codedrobe.app";
 const CODEDROBE_PORT: u16 = 9335;
-const BUNDLED_THEME_FILE: &str = "miku-future-beats-1.2.2.codedrobe-theme";
+const BUNDLED_THEMES: &[(&str, &str, &str)] = &[
+    (
+        "miku-future-beats",
+        "1.2.2",
+        "miku-future-beats-1.2.2.codedrobe-theme",
+    ),
+    (
+        "kuuga-crimson-awakening",
+        "1.2.0",
+        "kuuga-crimson-awakening-1.2.0.codedrobe-theme",
+    ),
+    (
+        "tiga-starlight-awakening",
+        "1.1.2",
+        "tiga-starlight-awakening-1.1.2.codedrobe-theme",
+    ),
+];
 const COMPAT_CORE_FILE: &str = "codedrobe-core-0.7.0-beta.0.tgz";
 const COMPAT_CORE_SHA256: &str = "b9ec7a467ac1e30f5879feff3bd6d35d3e68d3ce63db20e98c4fba379e91a354";
 const AI_THEME_COMPONENT_COVERAGE_REFERENCE: &str = r#"
@@ -903,7 +919,7 @@ fn resolve_theme_path(
     proxy: &ProxyConfig,
 ) -> Result<PathBuf, String> {
     if theme.bundled {
-        bundled_theme_path(app)
+        bundled_theme_path(app, theme)
     } else {
         ensure_theme_package(theme, proxy)
     }
@@ -1207,24 +1223,38 @@ fn ensure_theme_package(theme: &ThemeSelection, proxy: &ProxyConfig) -> Result<P
     Ok(destination)
 }
 
-fn bundled_theme_path(app: &AppHandle) -> Result<PathBuf, String> {
-    let development = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+fn bundled_theme_path(app: &AppHandle, theme: &ThemeSelection) -> Result<PathBuf, String> {
+    let file_name = BUNDLED_THEMES
+        .iter()
+        .find(|(slug, version, _)| *slug == theme.slug && *version == theme.version)
+        .map(|(_, _, file_name)| *file_name)
+        .ok_or_else(|| format!("未知的内置主题：{}@{}", theme.slug, theme.version))?;
+    let manifest_directory = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let development = manifest_directory
         .join("..")
-        .join("resources")
-        .join(BUNDLED_THEME_FILE);
+        .join("..")
+        .join("themes")
+        .join(file_name);
     if development.exists() {
         return Ok(development);
+    }
+    let legacy_development = manifest_directory
+        .join("..")
+        .join("resources")
+        .join(file_name);
+    if legacy_development.exists() {
+        return Ok(legacy_development);
     }
     let packaged = app
         .path()
         .resource_dir()
         .map_err(|error| error.to_string())?
         .join("themes")
-        .join(BUNDLED_THEME_FILE);
+        .join(file_name);
     packaged
         .exists()
         .then_some(packaged)
-        .ok_or_else(|| "内置初音主题包不存在。".to_string())
+        .ok_or_else(|| format!("内置主题包不存在：{file_name}"))
 }
 
 fn verify_proxy(proxy: &ProxyConfig) -> Result<(), String> {

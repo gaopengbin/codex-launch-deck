@@ -1,0 +1,73 @@
+{
+  "schemaVersion": 1,
+  "id": "kuuga-crimson-awakening",
+  "displayName": "空我 · 赤焰觉醒",
+  "version": "1.2.0",
+  "catalog": {
+    "name": {
+      "en": "Kuuga · Crimson Awakening",
+      "zh": "空我 · 赤焰觉醒"
+    },
+    "description": {
+      "en": "A cinematic dark workstation forged from smoke-black metal, crimson armor, and restrained antique-gold highlights.",
+      "zh": "以烟黑金属、深绯装甲与克制旧金高光构成的电影感暗色工作台。"
+    },
+    "categories": ["character", "artistic"]
+  },
+  "images": {
+    "hero": "assets/hero.png",
+    "sidebar": "assets/sidebar.webp",
+    "emblem": "assets/emblem.png"
+  },
+  "copy": {
+    "brandTitle": "空我 · 赤焰觉醒",
+    "brandSubtitle": "SMOKE · CRIMSON · ANCIENT GOLD",
+    "signature": "A New Hero. A New Legend.",
+    "tagline": "在黑暗中点燃灵感，以赤焰守护每一次创造。",
+    "projectPrefix": "觉醒记录 · ",
+    "projectLabel": "选择今天要守护的任务",
+    "ribbon": "炎"
+  },
+  "targets": {
+    "codex": {
+      "css": "codex.css",
+      "options": {
+        "rendererProfile": "codex-theme-v1",
+        "baseTheme": {
+          "mode": "dark",
+          "accent": "#C62832",
+          "ink": "#F2E9DD",
+          "surface": "#0B090A"
+        }
+      },
+      "verification": {
+        "contexts": [
+          {
+            "name": "home",
+            "when": {
+              "any": ["main.main-surface.dream-home-shell"]
+            },
+            "recommended": [
+              {
+                "name": "home-composer",
+                "any": [".composer-surface-chrome"]
+              }
+            ]
+          },
+          {
+            "name": "conversation",
+            "when": {
+              "any": ["main.main-surface:not(.dream-home-shell)"]
+            },
+            "recommended": [
+              {
+                "name": "conversation-composer",
+                "any": [".composer-surface-chrome"]
+              }
+            ]
+          }
+        ]
+      }
+    }
+  }
+}

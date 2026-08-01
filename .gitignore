@@ -2,3 +2,5 @@
 **/obj/
 output/
 release/
+desktop/src-tauri/target-*/
+desktop/src-tauri/app-icon-zoomed.png

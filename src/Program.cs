@@ -46,7 +46,7 @@ namespace ChatGPTProxyLauncherLite
         private bool english;
 
         private const int CodeDrobePort = 9335;
-        private const string ThemeFileName = "miku-future-beats-1.2.1.codedrobe-theme";
+        private const string ThemeFileName = "miku-future-beats-1.2.2.codedrobe-theme";
 
         public LauncherForm()
         {
@@ -453,7 +453,7 @@ namespace ChatGPTProxyLauncherLite
             var item = new ThemeItem
             {
                 Slug = "miku-future-beats",
-                Version = "1.2.1",
+                Version = "1.2.2",
                 NameZh = "初音未来 · Future Beats（内置）",
                 NameEn = "Hatsune Miku · Future Beats (bundled)",
                 Author = "local",

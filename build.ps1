@@ -13,7 +13,7 @@ $windowsDir = Split-Path -Parent ([Environment]::SystemDirectory)
 
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-$themeSource = Join-Path $projectDir 'themes\miku-future-beats-1.2.1.codedrobe-theme'
+$themeSource = Join-Path $projectDir 'themes\miku-future-beats-1.2.2.codedrobe-theme'
 if (Test-Path -LiteralPath $themeSource) {
     $themeOutput = Join-Path $outputDir 'themes'
     if (Test-Path -LiteralPath $themeOutput) {

@@ -1,0 +1,73 @@
+{
+  "schemaVersion": 1,
+  "id": "tiga-starlight-awakening",
+  "displayName": "迪迦 · 星辉觉醒",
+  "version": "1.1.2",
+  "catalog": {
+    "name": {
+      "en": "Tiga · Starlight Awakening",
+      "zh": "迪迦 · 星辉觉醒"
+    },
+    "description": {
+      "en": "A cinematic night-city workstation shaped by classic silver armor, midnight haze, and an icy-cyan energy core.",
+      "zh": "以经典银色装甲、午夜城市与冰蓝能量核心构成的电影感工作台。"
+    },
+    "categories": ["character", "artistic"]
+  },
+  "images": {
+    "hero": "assets/hero.webp",
+    "sidebar": "assets/sidebar.webp",
+    "emblem": "assets/emblem.png"
+  },
+  "copy": {
+    "brandTitle": "迪迦 · 星辉觉醒",
+    "brandSubtitle": "SILVER · STARLIGHT · ENERGY",
+    "signature": "Light Beyond the Stars.",
+    "tagline": "让沉静星光汇聚成每一次创造的能量。",
+    "projectPrefix": "星海记录 · ",
+    "projectLabel": "选择今天要点亮的任务",
+    "ribbon": "光"
+  },
+  "targets": {
+    "codex": {
+      "css": "codex.css",
+      "options": {
+        "rendererProfile": "codex-theme-v1",
+        "baseTheme": {
+          "mode": "dark",
+          "accent": "#48C9F2",
+          "ink": "#EAF5FA",
+          "surface": "#070B12"
+        }
+      },
+      "verification": {
+        "contexts": [
+          {
+            "name": "home",
+            "when": {
+              "any": ["main.main-surface.dream-home-shell"]
+            },
+            "recommended": [
+              {
+                "name": "home-composer",
+                "any": [".composer-surface-chrome"]
+              }
+            ]
+          },
+          {
+            "name": "conversation",
+            "when": {
+              "any": ["main.main-surface:not(.dream-home-shell)"]
+            },
+            "recommended": [
+              {
+                "name": "conversation-composer",
+                "any": [".composer-surface-chrome"]
+              }
+            ]
+          }
+        ]
+      }
+    }
+  }
+}

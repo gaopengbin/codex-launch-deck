@@ -6,7 +6,7 @@ html {
   color-scheme: light;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
-  background: #f4f6ef;
+  background: #eef2f6;
 }
 
 body {
@@ -18,6 +18,6 @@ body {
 }
 
 ::selection {
-  color: #10211d;
-  background: #dfff45;
+  color: #141a24;
+  background: #ffd84d;
 }
