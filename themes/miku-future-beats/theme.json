@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "miku-future-beats",
   "displayName": "初音未来 · Future Beats",
-  "version": "1.2.1",
+  "version": "1.2.2",
   "catalog": {
     "name": { "en": "Hatsune Miku · Future Beats", "zh": "初音未来 · Future Beats" },
     "description": {
@@ -55,12 +55,12 @@
           {
             "name": "home",
             "when": {
-              "any": ["[role='main']:has([data-testid='home-icon'])"]
+              "any": ["[data-feature='game-source']", ".group\\/home-suggestions", ".group\\/project-selector"]
             },
             "required": [
               {
                 "name": "home-hero-shell",
-                "any": ["[role='main']:has([data-testid='home-icon']) > div:first-child > div:first-child > div:first-child"]
+                "any": ["main.main-surface.dream-home-shell"]
               }
             ],
             "recommended": [
@@ -77,7 +77,7 @@
           {
             "name": "conversation",
             "when": {
-              "any": ["main.main-surface:not(:has([data-testid='home-icon']))"]
+              "any": ["main.main-surface:not(.dream-home-shell)"]
             },
             "recommended": [
               {

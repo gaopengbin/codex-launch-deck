@@ -274,66 +274,6 @@ html.codedrobe-codex-skin .dream-home {
   overflow-x: hidden !important;
 }
 
-.dream-home > div:first-child {
-  padding-top: 15px !important;
-  min-height: 100% !important;
-}
-
-.dream-home > div:first-child > div:first-child {
-  flex: 0 0 440px !important;
-  min-height: 440px !important;
-  align-items: flex-start !important;
-  padding-bottom: 0 !important;
-}
-
-.dream-home > div:first-child > div:first-child > div:first-child {
-  position: relative !important;
-  isolation: isolate;
-  width: calc(100% - 42px) !important;
-  max-width: none !important;
-  height: 266px !important;
-  min-height: 266px !important;
-  flex: 0 1 auto !important;
-  padding: 0 !important;
-  border: 1px solid rgba(145, 99, 151, .30) !important;
-  border-radius: 28px !important;
-  overflow: visible !important;
-  background-color: #fff9f7 !important;
-  background-image:
-    linear-gradient(90deg, #fff9f7 0%, rgba(255, 249, 247, .99) 46%, rgba(255, 249, 247, .76) 62%, rgba(255, 249, 247, .08) 82%),
-    var(--codedrobe-image-hero) !important;
-  background-repeat: no-repeat, no-repeat !important;
-  background-size: 100% 100%, auto 220% !important;
-  background-position: center, right 12% !important;
-  box-shadow: 0 16px 38px rgba(86, 55, 91, .16), inset 0 0 0 4px rgba(255, 255, 255, .34) !important;
-}
-
-.dream-home > div:first-child > div:first-child > div:first-child::before {
-  content: "";
-  position: absolute;
-  z-index: 0;
-  inset: 0 auto 0 0;
-  width: 64%;
-  border-radius: 27px 0 0 27px;
-  pointer-events: none;
-  background: linear-gradient(90deg, rgba(255, 250, 248, .97) 0%, rgba(255, 250, 248, .91) 58%, rgba(255, 250, 248, .62) 82%, transparent 100%);
-}
-
-.dream-home > div:first-child > div:first-child > div:first-child > div:first-child {
-  position: relative;
-  z-index: 1;
-  height: 100%;
-  align-items: center !important;
-  justify-content: flex-start !important;
-  padding-left: 42px;
-}
-
-.dream-home > div:first-child > div:first-child > div:first-child > div:first-child > div:first-child {
-  width: 55% !important;
-  align-items: flex-start !important;
-  gap: 0 !important;
-}
-
 .dream-home [data-testid="home-icon"] { display: none !important; }
 
 .dream-home [data-feature="game-source"] {
@@ -376,13 +316,6 @@ html.codedrobe-codex-skin .dream-home {
   font-weight: 650;
   vertical-align: middle;
   opacity: .88;
-}
-
-.dream-home > div:first-child > div:first-child > div:first-child > div:nth-child(2) {
-  left: 14px !important;
-  right: 14px !important;
-  top: 100% !important;
-  margin-top: 14px !important;
 }
 
 .dream-home .group\/home-suggestions { overflow: visible !important; }
@@ -563,6 +496,7 @@ html.codedrobe-codex-skin aside.app-shell-left-panel [aria-current="page"] {
 }
 
 html.codedrobe-codex-skin main.main-surface {
+  isolation: isolate;
   background:
     linear-gradient(rgba(248, 254, 255, .91), rgba(237, 250, 253, .93)),
     var(--codedrobe-image-texture) center / 760px auto repeat !important;
@@ -570,11 +504,24 @@ html.codedrobe-codex-skin main.main-surface {
   box-shadow: inset 0 1px rgba(255, 255, 255, .98), -9px 0 30px rgba(12, 105, 119, .08) !important;
 }
 
-html.codedrobe-codex-skin:not(:has([data-testid="home-icon"])) main.main-surface::after {
+html.codedrobe-codex-skin main.main-surface.dream-home-shell::before {
   content: "";
   position: absolute;
   inset: 46px 0 0;
-  z-index: 0;
+  z-index: -1;
+  background:
+    linear-gradient(90deg, rgba(247, 253, 255, .96) 0%, rgba(239, 252, 255, .79) 42%, rgba(240, 246, 255, .16) 68%, transparent 82%),
+    var(--codedrobe-image-hero) right 3% center / auto 94% no-repeat;
+  opacity: .56;
+  pointer-events: none;
+  animation: miku-home-reveal 700ms cubic-bezier(.2, .75, .25, 1) both;
+}
+
+html.codedrobe-codex-skin main.main-surface:not(.dream-home-shell)::after {
+  content: "";
+  position: absolute;
+  inset: 46px 0 0;
+  z-index: -1;
   background: var(--codedrobe-image-hero) right 2% bottom 4% / auto 74% no-repeat;
   opacity: .23;
   filter: saturate(1.08) contrast(1.03);
@@ -584,9 +531,9 @@ html.codedrobe-codex-skin:not(:has([data-testid="home-icon"])) main.main-surface
   animation: miku-stage-reveal 700ms cubic-bezier(.2, .75, .25, 1) both;
 }
 
-html.codedrobe-codex-skin:not(:has([data-testid="home-icon"])) main.main-surface > * {
-  position: relative;
-  z-index: 1;
+@keyframes miku-home-reveal {
+  from { opacity: 0; transform: translateX(18px); }
+  to { opacity: .56; transform: translateX(0); }
 }
 
 @keyframes miku-stage-reveal {
@@ -599,7 +546,7 @@ html.codedrobe-codex-skin main.main-surface > header.app-header-tint {
   border-bottom-color: rgba(22, 191, 196, .22) !important;
 }
 
-html.codedrobe-codex-skin:not(:has([data-testid="home-icon"]))
+html.codedrobe-codex-skin
   main.main-surface > header.app-header-tint > div.flex-1.isolate::before {
   content: "♫  Miku Future Beats · 灵感同频中";
   position: absolute;
@@ -645,21 +592,6 @@ html.codedrobe-codex-skin:not(:has([data-testid="home-icon"]))
 .dream-polaroid::before { content: "♫"; color: var(--miku-pink); filter: drop-shadow(0 3px 5px rgba(12, 105, 119, .20)); }
 .dream-ribbon { color: var(--miku-pink); filter: drop-shadow(0 4px 7px rgba(12, 105, 119, .16)); }
 .dream-ribbon span { color: var(--miku-teal); }
-
-.dream-home > div:first-child > div:first-child > div:first-child {
-  border-color: rgba(22, 191, 196, .34) !important;
-  background-color: #f5fcff !important;
-  background-image:
-    linear-gradient(90deg, #f7fdff 0%, rgba(247, 253, 255, .99) 43%, rgba(239, 252, 255, .72) 60%, rgba(240, 246, 255, .06) 82%),
-    var(--codedrobe-image-hero) !important;
-  background-size: 100% 100%, auto 164% !important;
-  background-position: center, right 5% center !important;
-  box-shadow: 0 18px 42px rgba(12, 105, 119, .17), 0 7px 22px rgba(159, 146, 248, .08), inset 0 0 0 4px rgba(255, 255, 255, .42) !important;
-}
-
-.dream-home > div:first-child > div:first-child > div:first-child::before {
-  background: linear-gradient(90deg, rgba(247, 253, 255, .98) 0%, rgba(247, 253, 255, .93) 58%, rgba(231, 249, 252, .61) 82%, transparent 100%);
-}
 
 .dream-home [data-feature="game-source"] { color: var(--miku-ink) !important; font-family: "Avenir Next", "PingFang SC", sans-serif !important; }
 .dream-home [data-feature="game-source"]::after { content: var(--dream-tagline, "让灵感、代码与旋律同频闪耀"); color: var(--miku-ink-soft); }
@@ -707,8 +639,7 @@ html.codedrobe-codex-skin *:focus-visible { outline-color: rgba(22, 191, 196, .7
   .dream-polaroid { display: none !important; }
   .dream-ribbon { bottom: 70px; font-size: 24px; }
   .dream-home { --thread-content-max-width: min(860px, calc(100cqw - 30px)) !important; }
-  .dream-home > div:first-child > div:first-child > div:first-child { width: calc(100% - 28px) !important; }
-  html.codedrobe-codex-skin:not(:has([data-testid="home-icon"])) main.main-surface::after {
+  html.codedrobe-codex-skin main.main-surface:not(.dream-home-shell)::after {
     background-size: auto 62%;
     background-position: right -10% bottom 6%;
     opacity: .16;
@@ -719,14 +650,10 @@ html.codedrobe-codex-skin *:focus-visible { outline-color: rgba(22, 191, 196, .7
   .dream-signature { display: none !important; }
   .dream-brand { left: 15px; }
   .dream-brand b { font-size: 13px; }
-  .dream-home > div:first-child > div:first-child { flex-basis: 398px !important; min-height: 398px !important; }
-  .dream-home > div:first-child > div:first-child > div:first-child { height: 226px !important; min-height: 226px !important; }
-  .dream-home > div:first-child > div:first-child > div:first-child > div:first-child { padding-left: 26px; }
-  .dream-home > div:first-child > div:first-child > div:first-child > div:first-child > div:first-child { width: 66% !important; }
   .dream-home [data-feature="game-source"] { font-size: 18px !important; }
   .dream-home [data-feature="game-source"]::after { font-size: 12px; margin-top: 10px; }
   .dream-home .group\/home-suggestions button { min-height: 114px !important; font-size: 12px !important; }
-  html.codedrobe-codex-skin:not(:has([data-testid="home-icon"])) main.main-surface::after {
+  html.codedrobe-codex-skin main.main-surface:not(.dream-home-shell)::after {
     display: none;
   }
 }

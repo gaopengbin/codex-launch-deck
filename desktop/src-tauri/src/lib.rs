@@ -3,6 +3,7 @@ use encoding_rs::GBK;
 use image::{imageops::FilterType, DynamicImage, ImageBuffer, Rgb};
 use reqwest::{Client, Url};
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 use std::{
     collections::HashMap,
     env,
@@ -24,7 +25,9 @@ use std::os::windows::process::CommandExt;
 
 const CODEDROBE_BASE: &str = "https://codedrobe.app";
 const CODEDROBE_PORT: u16 = 9335;
-const BUNDLED_THEME_FILE: &str = "miku-future-beats-1.2.1.codedrobe-theme";
+const BUNDLED_THEME_FILE: &str = "miku-future-beats-1.2.2.codedrobe-theme";
+const COMPAT_CORE_FILE: &str = "codedrobe-core-0.7.0-beta.0.tgz";
+const COMPAT_CORE_SHA256: &str = "b9ec7a467ac1e30f5879feff3bd6d35d3e68d3ce63db20e98c4fba379e91a354";
 const AI_THEME_COMPONENT_COVERAGE_REFERENCE: &str = r#"
 
 /* Launch Deck coverage contract for Codex 26.721+.
@@ -224,6 +227,12 @@ struct WatcherRecord {
     pid: u32,
     port: u16,
     theme_path: String,
+}
+
+#[derive(Clone, Debug)]
+enum CodedrobeRuntime {
+    Official,
+    Compatibility(PathBuf),
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -724,23 +733,27 @@ fn launch_codex_blocking(
             &path,
             "--no-launch",
         ];
-        if let Err(error) = run_codedrobe_apply_with_retry(
+        let runtime = match run_codedrobe_apply_with_retry(
+            app,
             &apply_args,
             &retry_args,
             Some(&request.proxy),
             selected_port,
         ) {
-            if is_codex_running() {
-                return Ok(ActionResult {
-                    message: format!(
-                        "Codex 已启动（CDP {selected_port}），但主题应用失败：{error}"
-                    ),
-                    theme_path: Some(path),
-                    warning: true,
-                });
+            Ok((_, runtime)) => runtime,
+            Err(error) => {
+                if is_codex_running() {
+                    return Ok(ActionResult {
+                        message: format!(
+                            "Codex 已启动（CDP {selected_port}），但主题应用失败：{error}"
+                        ),
+                        theme_path: Some(path),
+                        warning: true,
+                    });
+                }
+                return Err(error);
             }
-            return Err(error);
-        }
+        };
         verify_codex_appearance(appearance.as_deref())?;
 
         let watcher_args = [
@@ -755,16 +768,17 @@ fn launch_codex_blocking(
             "--watch",
         ];
         stop_watcher(watcher)?;
-        let child = match spawn_codedrobe(&watcher_args, Some(&request.proxy)) {
-            Ok(child) => child,
-            Err(error) => {
-                return Ok(ActionResult {
-                    message: format!("Codex 与主题已启动，但主题守护进程启动失败：{error}"),
-                    theme_path: Some(path),
-                    warning: true,
-                });
-            }
-        };
+        let child =
+            match spawn_codedrobe_with_runtime(&watcher_args, Some(&request.proxy), &runtime) {
+                Ok(child) => child,
+                Err(error) => {
+                    return Ok(ActionResult {
+                        message: format!("Codex 与主题已启动，但主题守护进程启动失败：{error}"),
+                        theme_path: Some(path),
+                        warning: true,
+                    });
+                }
+            };
         if let Err(error) = set_watcher(watcher, child, selected_port, &path) {
             return Ok(ActionResult {
                 message: format!("Codex 与主题已启动，但无法管理主题守护进程：{error}"),
@@ -843,7 +857,8 @@ fn apply_theme_blocking(
         &path,
         "--no-launch",
     ];
-    run_codedrobe_apply_with_retry(
+    let (_, runtime) = run_codedrobe_apply_with_retry(
+        app,
         &apply_args,
         &apply_args,
         Some(proxy),
@@ -855,7 +870,7 @@ fn apply_theme_blocking(
         )
     })?;
     verify_codex_appearance(appearance.as_deref())?;
-    start_watcher(watcher, selected_port, &path, proxy)?;
+    start_watcher(watcher, selected_port, &path, proxy, &runtime)?;
     let runtime_warning = appearance
         .as_deref()
         .and_then(|expected| sync_codex_runtime_appearance(selected_port, expected).err());
@@ -959,9 +974,10 @@ fn start_watcher(
     selected_port: u16,
     theme_path: &str,
     proxy: &ProxyConfig,
+    runtime: &CodedrobeRuntime,
 ) -> Result<(), String> {
     let port = selected_port.to_string();
-    let child = spawn_codedrobe(
+    let child = spawn_codedrobe_with_runtime(
         &[
             "apply",
             "--app",
@@ -974,6 +990,7 @@ fn start_watcher(
             "--watch",
         ],
         Some(proxy),
+        runtime,
     )?;
     set_watcher(watcher, child, selected_port, theme_path)
 }
@@ -1750,8 +1767,9 @@ fn build_ai_theme_prompt(
 - 不要只替换背景。把主视觉中的配色、材质和视觉母题延展为完整的界面语言：用 CSS 变量统一页面、侧栏、标题栏、卡片、按钮、输入区、消息、代码块、边框、阴影和焦点状态；用渐变、伪元素、边框、阴影或轻量动画制作小装饰细节。仅当图片确实比 CSS 更适合时才增加命名图片素材。
 - 必须覆盖模板末尾的完整组件清单：右侧输出/来源摘要面板（thread floating content 与 summary-panel-item）、Tooltip、Popover、Dropdown、Menu、Select/Listbox、Dialog，以及它们的 hover、open、highlighted 和 focus-visible 状态。浮层不能继续使用与主题不一致的系统灰色，也不能只改文字不改表面、边框和阴影。
 - 图片只能作为背景、纹理或非交互装饰，不能作为全窗口 UI 截图覆盖应用。所有装饰层必须 `pointer-events: none`，窄窗口要有响应式降级，并为动画提供 `prefers-reduced-motion` 处理。
-- 图片模式下，hero 必须直接挂载到 `main.main-surface`、它的伪元素或模板中的首页 hero 节点，确保不会被 Codex 的不透明主表面遮住；body 可以有纹理，但不能是 hero 的唯一挂载点。
-- 禁止用 `:where(aside)`、`:where(header)`、`:where(button)`、`[class*="card"]` 等全局宽泛选择器批量覆盖原生组件。侧栏、主工作区、标题栏和输入区至少分别使用 `aside.app-shell-left-panel`、`main.main-surface`、`header.app-header-tint` 和 `.composer-surface-chrome` 定向设计。
+- 图片模式下，hero 必须直接挂载到 `:is(main.main-surface, #root main)`、它的伪元素或模板中的首页 hero 节点，确保不会被 Codex 的不透明主表面遮住；body 可以有纹理，但不能是 hero 的唯一挂载点。
+- 禁止用 `:where(aside)`、`:where(header)`、`:where(button)`、`[class*="card"]` 等全局宽泛选择器批量覆盖原生组件。侧栏、主工作区、标题栏和输入区至少分别使用 `aside.app-shell-left-panel`、`:is(main.main-surface, #root main)`、`header.app-header-tint` 和 `.composer-surface-chrome` 定向设计。
+- 禁止对 `main.main-surface > *`、`#root main > *` 或 `:is(main.main-surface, #root main) > *` 统一设置 `position` 或 `z-index`；这会覆盖 Codex 原生 fixed/sticky 顶栏并造成标题与正文重叠。背景装饰应放在主区伪元素上，主区使用 `isolation: isolate`，装饰伪元素使用 `z-index: -1`，不要抬高全部原生子节点。
 - 只在当前工作目录内创建或修改文件，不读取无关的用户文件。
 - 不要启动、关闭或重启 Codex，不要应用主题，不连接 CDP 端口。
 - 只生成 CodeDrobe 主题源码，不要运行 PowerShell、npx、npm、codedrobe 或任何打包/检查命令；Launch Deck 会在沙箱外统一打包和校验。
@@ -1904,11 +1922,12 @@ fn validate_generated_visual_contract(
         );
     }
     if !selector_block_references(css, "main.main-surface", "--codedrobe-image-hero")
+        && !selector_block_references(css, "#root main", "--codedrobe-image-hero")
         && !selector_block_references(css, "[role=\"main\"]", "--codedrobe-image-hero")
         && !selector_block_references(css, "[role='main']", "--codedrobe-image-hero")
     {
         return Err(
-            "主视觉只被挂在不可见的外层：请把 --codedrobe-image-hero 直接用于 main.main-surface、它的伪元素或首页主内容节点。"
+            "主视觉只被挂在不可见的外层：请把 --codedrobe-image-hero 直接用于 main.main-surface、#root main、它们的伪元素或首页主内容节点。"
                 .to_string(),
         );
     }
@@ -1997,7 +2016,6 @@ fn validate_generated_reference_brief_value(
 fn validate_generated_css_quality_contract(css: &str, visual_mode: &str) -> Result<(), String> {
     for required in [
         "aside.app-shell-left-panel",
-        "main.main-surface",
         "header.app-header-tint",
         ".composer-surface-chrome",
         "--color-token-dropdown-background",
@@ -2014,6 +2032,12 @@ fn validate_generated_css_quality_contract(css: &str, visual_mode: &str) -> Resu
             ));
         }
     }
+    if !css.contains("main.main-surface") && !css.contains("#root main") {
+        return Err(
+            "生成的 CSS 缺少 Codex 主工作区挂载点 main.main-surface 或 #root main，无法兼容当前 Codex。"
+                .to_string(),
+        );
+    }
     for broad in [
         ":where(aside",
         ":where(header",
@@ -2026,6 +2050,19 @@ fn validate_generated_css_quality_contract(css: &str, visual_mode: &str) -> Resu
             return Err(format!(
                 "生成的 CSS 使用了过宽选择器 {broad}，可能污染原生控件，请改用模板中的语义选择器。"
             ));
+        }
+    }
+    let compact_css = css
+        .chars()
+        .filter(|character| !character.is_whitespace())
+        .flat_map(char::to_lowercase)
+        .collect::<String>();
+    for dangerous in ["main.main-surface>*", "#rootmain>*", "#rootmain)>*"] {
+        if compact_css.contains(dangerous) {
+            return Err(
+                "生成的 CSS 禁止统一改写 Codex 主工作区全部直属子节点；请把装饰放到主区伪元素并使用 z-index: -1，保留原生顶部栏的 fixed/sticky 布局。"
+                    .to_string(),
+            );
         }
     }
     if visual_mode != "css" && !css.contains("--codedrobe-image-hero") {
@@ -2685,7 +2722,15 @@ fn apply_proxy_environment(command: &mut Command, proxy: &ProxyConfig) {
 }
 
 fn run_codedrobe(args: &[&str], proxy: Option<&ProxyConfig>) -> Result<Output, String> {
-    let mut command = codedrobe_command(args)?;
+    run_codedrobe_with_runtime(args, proxy, &CodedrobeRuntime::Official)
+}
+
+fn run_codedrobe_with_runtime(
+    args: &[&str],
+    proxy: Option<&ProxyConfig>,
+    runtime: &CodedrobeRuntime,
+) -> Result<Output, String> {
+    let mut command = codedrobe_command_for_runtime(args, runtime)?;
     if let Some(proxy) = proxy {
         apply_proxy_environment(&mut command, proxy);
     }
@@ -2700,18 +2745,21 @@ fn run_codedrobe(args: &[&str], proxy: Option<&ProxyConfig>) -> Result<Output, S
 }
 
 fn run_codedrobe_apply_with_retry(
+    app: &AppHandle,
     initial_args: &[&str],
     retry_args: &[&str],
     proxy: Option<&ProxyConfig>,
     port: u16,
-) -> Result<Output, String> {
-    match run_codedrobe(initial_args, proxy) {
-        Ok(output) => Ok(output),
+) -> Result<(Output, CodedrobeRuntime), String> {
+    let runtime = compatibility_runtime(app)?;
+    match run_codedrobe_with_runtime(initial_args, proxy, &runtime) {
+        Ok(output) => Ok((output, runtime)),
         Err(initial_error) if is_transient_codedrobe_preflight_error(&initial_error) => {
             wait_for_codex_theme_surface(port, Duration::from_secs(15)).map_err(|wait_error| {
                 format!("{initial_error}；自动重试前等待 Codex 主窗口失败：{wait_error}")
             })?;
-            run_codedrobe(retry_args, proxy)
+            run_codedrobe_with_runtime(retry_args, proxy, &runtime)
+                .map(|output| (output, runtime))
                 .map_err(|retry_error| format!("{retry_error}（Codex 主窗口稳定后自动重试仍失败）"))
         }
         Err(error) => Err(error),
@@ -2731,7 +2779,7 @@ fn wait_for_codex_theme_surface(port: u16, timeout: Duration) -> Result<(), Stri
             port,
             "Runtime.evaluate",
             serde_json::json!({
-                "expression": "Boolean(document.querySelector('main.main-surface'))",
+                "expression": "Boolean(document.querySelector('main.main-surface, #root main'))",
                 "returnByValue": true
             }),
         )
@@ -2752,13 +2800,17 @@ fn wait_for_codex_theme_surface(port: u16, timeout: Duration) -> Result<(), Stri
         thread::sleep(Duration::from_millis(250));
     }
     Err(format!(
-        "在 {} 秒内没有检测到 main.main-surface（CDP {port}）",
+        "在 {} 秒内没有检测到 Codex 主工作区 main.main-surface 或 #root main（CDP {port}）",
         timeout.as_secs()
     ))
 }
 
-fn spawn_codedrobe(args: &[&str], proxy: Option<&ProxyConfig>) -> Result<Child, String> {
-    let mut command = codedrobe_command(args)?;
+fn spawn_codedrobe_with_runtime(
+    args: &[&str],
+    proxy: Option<&ProxyConfig>,
+    runtime: &CodedrobeRuntime,
+) -> Result<Child, String> {
+    let mut command = codedrobe_command_for_runtime(args, runtime)?;
     if let Some(proxy) = proxy {
         apply_proxy_environment(&mut command, proxy);
     }
@@ -2766,6 +2818,16 @@ fn spawn_codedrobe(args: &[&str], proxy: Option<&ProxyConfig>) -> Result<Child, 
     command
         .spawn()
         .map_err(|error| format!("无法启动 CodeDrobe watcher：{error}"))
+}
+
+fn codedrobe_command_for_runtime(
+    args: &[&str],
+    runtime: &CodedrobeRuntime,
+) -> Result<Command, String> {
+    match runtime {
+        CodedrobeRuntime::Official => codedrobe_command(args),
+        CodedrobeRuntime::Compatibility(package) => compatibility_codedrobe_command(args, package),
+    }
 }
 
 fn codedrobe_command(args: &[&str]) -> Result<Command, String> {
@@ -2777,27 +2839,73 @@ fn codedrobe_command(args: &[&str]) -> Result<Command, String> {
         return Ok(command);
     }
 
-    if let Some(npx) = find_on_path("npx.cmd") {
-        let node_directory = npx
-            .parent()
-            .ok_or_else(|| "无法定位 Node.js 目录。".to_string())?;
-        let node = node_directory.join("node.exe");
-        let npx_cli = node_directory
-            .join("node_modules")
-            .join("npm")
-            .join("bin")
-            .join("npx-cli.js");
-        if node.is_file() && npx_cli.is_file() {
-            let mut command = background_command(node);
-            command
-                .arg(npx_cli)
-                .args(["--yes", "@codedrobe/core@latest"])
-                .args(args);
-            return Ok(command);
-        }
+    if let Some((node, npx_cli)) = find_npx_runtime() {
+        let mut command = background_command(node);
+        command
+            .arg(npx_cli)
+            .args(["--yes", "@codedrobe/core@latest"])
+            .args(args);
+        return Ok(command);
     }
 
     Err("CodeDrobe 需要 Node.js / npx。".to_string())
+}
+
+fn compatibility_codedrobe_command(args: &[&str], package: &Path) -> Result<Command, String> {
+    let (node, npx_cli) =
+        find_npx_runtime().ok_or_else(|| "CodeDrobe 兼容层需要 Node.js / npx。".to_string())?;
+    let mut command = background_command(node);
+    command
+        .arg(npx_cli)
+        .args(["--yes", "--package"])
+        .arg(package)
+        .arg("codedrobe")
+        .args(args);
+    Ok(command)
+}
+
+fn find_npx_runtime() -> Option<(PathBuf, PathBuf)> {
+    let npx = find_on_path("npx.cmd")?;
+    let node_directory = npx.parent()?;
+    let node = node_directory.join("node.exe");
+    let npx_cli = node_directory
+        .join("node_modules")
+        .join("npm")
+        .join("bin")
+        .join("npx-cli.js");
+    (node.is_file() && npx_cli.is_file()).then_some((node, npx_cli))
+}
+
+fn compatibility_runtime(app: &AppHandle) -> Result<CodedrobeRuntime, String> {
+    let development = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("..")
+        .join("..")
+        .join("compat")
+        .join(COMPAT_CORE_FILE);
+    let package = if development.is_file() {
+        development
+    } else {
+        app.path()
+            .resource_dir()
+            .map_err(|error| error.to_string())?
+            .join("compat")
+            .join(COMPAT_CORE_FILE)
+    };
+    verify_compatibility_package(&package)?;
+    Ok(CodedrobeRuntime::Compatibility(package))
+}
+
+fn verify_compatibility_package(package: &Path) -> Result<(), String> {
+    let bytes = fs::read(package).map_err(|error| format!("无法读取主题兼容层：{error}"))?;
+    let actual = sha256_hex(&bytes);
+    if actual != COMPAT_CORE_SHA256 {
+        return Err("主题兼容层完整性校验失败。".to_string());
+    }
+    Ok(())
+}
+
+fn sha256_hex(bytes: &[u8]) -> String {
+    format!("{:x}", Sha256::digest(bytes))
 }
 
 fn codedrobe_error(output: &Output) -> String {
@@ -3081,6 +3189,20 @@ mod tests {
     }
 
     #[test]
+    fn verifies_the_pinned_codedrobe_compatibility_package() {
+        let package = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("..")
+            .join("..")
+            .join("compat")
+            .join(COMPAT_CORE_FILE);
+        verify_compatibility_package(&package).expect("compatibility package should be pinned");
+        assert_eq!(
+            sha256_hex(b"abc"),
+            "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
+        );
+    }
+
+    #[test]
     fn rejects_store_managed_codex_cli_path() {
         assert!(is_windowsapps_path(Path::new(
             r"C:\Program Files\WindowsApps\OpenAI.Codex_1.0.0_x64\app\resources\codex.exe"
@@ -3291,11 +3413,18 @@ mod tests {
         .concat();
         let (white_png, white_bytes) = test_png([245, 248, 252]);
         let with_image = serde_json::json!({
-            "assets": { "images": { "hero": { "base64": white_png } } },
+            "assets": { "images": { "hero": { "base64": white_png.clone() } } },
             "targets": { "codex": { "css": valid_css } }
         });
         assert!(validate_generated_visual_contract(&with_image, "light", "upload", None).is_ok());
         assert!(validate_generated_visual_contract(&with_image, "light", "ai", None).is_ok());
+        let with_codex_535_root = serde_json::json!({
+            "assets": { "images": { "hero": { "base64": white_png } } },
+            "targets": { "codex": { "css": valid_css.replace("main.main-surface", "#root main") } }
+        });
+        assert!(
+            validate_generated_visual_contract(&with_codex_535_root, "light", "ai", None).is_ok()
+        );
         assert!(validate_generated_visual_contract(
             &with_image,
             "light",
@@ -3406,6 +3535,18 @@ mod tests {
             "html.codedrobe-host-codex :where(button)",
         );
         assert!(validate_generated_css_quality_contract(&broad, "css").is_err());
+
+        for dangerous in [
+            "html.codedrobe-host-codex main.main-surface > * { position: relative; z-index: 1; }",
+            "html.codedrobe-host-codex #root main>* { z-index: 1; }",
+            "html.codedrobe-host-codex :is(main.main-surface, #root main) > * { position: relative; }",
+        ] {
+            assert!(validate_generated_css_quality_contract(
+                &format!("{body_only}\n{dangerous}"),
+                "css"
+            )
+            .is_err());
+        }
     }
 
     #[test]
@@ -3420,6 +3561,11 @@ mod tests {
             AI_THEME_COMPONENT_COVERAGE_REFERENCE
         );
         assert!(validate_generated_css_quality_contract(&complete, "css").is_ok());
+        assert!(validate_generated_css_quality_contract(
+            &complete.replace("main.main-surface", "#root main"),
+            "css"
+        )
+        .is_ok());
         assert!(validate_generated_css_quality_contract(
             &complete.replace("[role=\"tooltip\"]", "[data-missing-tooltip]"),
             "css"

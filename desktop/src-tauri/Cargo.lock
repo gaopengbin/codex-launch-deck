@@ -501,7 +501,7 @@ dependencies = [
 
 [[package]]
 name = "codex-launch-deck"
-version = "2.1.2"
+version = "2.1.3"
 dependencies = [
  "base64 0.22.1",
  "encoding_rs",
@@ -510,6 +510,7 @@ dependencies = [
  "reqwest 0.12.28",
  "serde",
  "serde_json",
+ "sha2",
  "tauri",
  "tauri-build",
  "tauri-plugin-dialog",

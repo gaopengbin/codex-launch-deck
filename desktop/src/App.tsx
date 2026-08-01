@@ -113,7 +113,7 @@ const bundledTheme: Theme = {
     zh: '初音未来 · Future Beats',
     en: 'Hatsune Miku · Future Beats',
   },
-  version: '1.2.1',
+  version: '1.2.2',
   description: {
     zh: '冰青、樱粉与未来节拍交织的全幅主题，随启动器离线提供。',
     en: 'An ice-teal and sakura-pink full-window theme bundled for offline use.',
@@ -1147,12 +1147,13 @@ function themeAppearance(theme: Theme, appearances: AppState['themeAppearances']
 }
 
 function mergeThemes(generatedThemes: Theme[], marketplaceThemes: Theme[]) {
-  const seen = new Set<string>([`${bundledTheme.slug}@${bundledTheme.version}`])
+  // A slug is the stable theme identity. Prefer offline/generated copies over
+  // marketplace versions so one theme never renders as multiple cards.
+  const seen = new Set<string>([bundledTheme.slug])
   const merged = [bundledTheme]
   for (const theme of [...generatedThemes, ...marketplaceThemes]) {
-    const key = `${theme.slug}@${theme.version}`
-    if (seen.has(key)) continue
-    seen.add(key)
+    if (seen.has(theme.slug)) continue
+    seen.add(theme.slug)
     merged.push(theme)
   }
   return merged
