@@ -294,12 +294,13 @@ function App() {
     void loadAiState()
   }, [])
 
-  const selectedPublishKey = selectedTheme.generated
+  const selectedThemePublishable = Boolean(selectedTheme.generated || selectedTheme.bundled)
+  const selectedPublishKey = selectedThemePublishable
     ? `${selectedTheme.slug}@${selectedTheme.version}`
     : null
 
   const loadPublishInfo = useEffectEvent(async () => {
-    if (!selectedTheme.generated) return
+    if (!selectedThemePublishable) return
     try {
       setPublishInfo(await invoke<ThemePublishInfo>('get_theme_publish_info', {
         theme: themeSelection(selectedTheme),
@@ -572,7 +573,7 @@ function App() {
       const auth = await invoke<CodeDrobeAuthStatus>('login_codedrobe', { proxy })
       setCodeDrobeAuth(auth)
       if (auth.creatorHandle) {
-        setStatus(`CodeDrobe 创作者 @${auth.creatorHandle} 登录成功，现在可以上传本地 AI 主题。`)
+        setStatus(`CodeDrobe 创作者 @${auth.creatorHandle} 登录成功，现在可以上传本地主题。`)
         setStatusTone('success')
       } else {
         setStatus('CodeDrobe 登录成功；请先创建创作者资料，再上传主题。')
@@ -627,7 +628,7 @@ function App() {
   }
 
   async function publishSelectedTheme(submit: boolean) {
-    if (!selectedTheme.generated || !publishInfo?.ready) return
+    if (!selectedThemePublishable || !publishInfo?.ready) return
     setBusy('publish')
     setStatus(submit ? '正在提交 CodeDrobe 商店审核…' : '正在上传 CodeDrobe 主题草稿…')
     setStatusTone('idle')
@@ -877,7 +878,7 @@ function App() {
                 <div className="download-progress-track"><i style={{ width: `${downloadProgress}%` }} /></div>
               </div>
             )}
-            {selectedTheme.generated && isInstalled(selectedTheme, appState.cachedThemes) && (
+            {selectedThemePublishable && isInstalled(selectedTheme, appState.cachedThemes) && (
               <section className="publisher-card">
                 <div className="publisher-head">
                   <div>
@@ -1171,7 +1172,7 @@ function SettingsPanel({ appState, busy, onRestore, onOpenStore }: { appState: A
         <article>
           <span className="setting-number">03</span>
           <h3>CodeDrobe 创作者连接</h3>
-          <p>Launch Deck 已支持通过官方 CLI 登录和发布本地 AI 主题；完整商店与跨应用管理仍可使用 CodeDrobe Desktop。</p>
+          <p>Launch Deck 已支持通过官方 CLI 登录和发布内置或本地创作主题；完整商店与跨应用管理仍可使用 CodeDrobe Desktop。</p>
           <button className="secondary" onClick={onOpenStore}>下载 CodeDrobe Desktop</button>
         </article>
       </div>

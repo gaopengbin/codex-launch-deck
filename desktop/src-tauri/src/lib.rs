@@ -406,9 +406,12 @@ async fn logout_codedrobe(proxy: Option<ProxyConfig>) -> Result<CodeDrobeAuthSta
 }
 
 #[tauri::command]
-async fn get_theme_publish_info(theme: ThemeSelection) -> Result<ThemePublishInfo, String> {
+async fn get_theme_publish_info(
+    app: AppHandle,
+    theme: ThemeSelection,
+) -> Result<ThemePublishInfo, String> {
     tauri::async_runtime::spawn_blocking(move || {
-        let path = generated_theme_package_path(&theme)?;
+        let path = publishable_theme_package_path(&app, &theme)?;
         inspect_theme_publish_info(&path)
     })
     .await
@@ -417,9 +420,10 @@ async fn get_theme_publish_info(theme: ThemeSelection) -> Result<ThemePublishInf
 
 #[tauri::command]
 async fn publish_generated_theme(
+    app: AppHandle,
     request: ThemePublishRequest,
 ) -> Result<ThemePublishResult, String> {
-    tauri::async_runtime::spawn_blocking(move || publish_generated_theme_blocking(&request))
+    tauri::async_runtime::spawn_blocking(move || publish_generated_theme_blocking(&app, &request))
         .await
         .map_err(|error| error.to_string())?
 }
@@ -1327,6 +1331,17 @@ fn generated_theme_package_path(theme: &ThemeSelection) -> Result<PathBuf, Strin
         .ok_or_else(|| "AI 主题包已不在本地缓存中，请重新生成或导入。".to_string())
 }
 
+fn publishable_theme_package_path(
+    app: &AppHandle,
+    theme: &ThemeSelection,
+) -> Result<PathBuf, String> {
+    if theme.bundled {
+        bundled_theme_path(app, theme)
+    } else {
+        generated_theme_package_path(theme)
+    }
+}
+
 fn localized_catalog_value_present(value: Option<&serde_json::Value>) -> bool {
     match value {
         Some(serde_json::Value::String(text)) => !text.trim().is_empty(),
@@ -1400,13 +1415,14 @@ fn theme_publish_info_value(package: &serde_json::Value) -> ThemePublishInfo {
 }
 
 fn inspect_theme_publish_info(path: &Path) -> Result<ThemePublishInfo, String> {
-    let bytes = fs::read(path).map_err(|error| format!("无法读取 AI 主题包：{error}"))?;
+    let bytes = fs::read(path).map_err(|error| format!("无法读取本地主题包：{error}"))?;
     let package: serde_json::Value = serde_json::from_slice(&bytes)
-        .map_err(|error| format!("AI 主题包不是有效 JSON：{error}"))?;
+        .map_err(|error| format!("本地主题包不是有效 JSON：{error}"))?;
     Ok(theme_publish_info_value(&package))
 }
 
 fn publish_generated_theme_blocking(
+    app: &AppHandle,
     request: &ThemePublishRequest,
 ) -> Result<ThemePublishResult, String> {
     let auth = codedrobe_auth_status_blocking(Some(&request.proxy))?;
@@ -1419,7 +1435,7 @@ fn publish_generated_theme_blocking(
                 .to_string(),
         );
     }
-    let path = generated_theme_package_path(&request.theme)?;
+    let path = publishable_theme_package_path(app, &request.theme)?;
     let info = inspect_theme_publish_info(&path)?;
     if !info.ready {
         return Err(format!(
@@ -3812,6 +3828,20 @@ mod tests {
         assert!(ready.ready);
         assert_eq!(ready.categories, ["artistic", "futuristic"]);
         assert!(ready.has_cover);
+    }
+
+    #[test]
+    fn bundled_themes_are_ready_for_creator_publish() {
+        let themes_directory = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("..")
+            .join("..")
+            .join("themes");
+        for (_, _, file_name) in BUNDLED_THEMES {
+            let info = inspect_theme_publish_info(&themes_directory.join(file_name))
+                .unwrap_or_else(|error| panic!("{file_name} should be inspectable: {error}"));
+            assert!(info.ready, "{file_name} is missing: {:?}", info.missing);
+            assert!(info.has_cover, "{file_name} should include store artwork");
+        }
     }
 
     #[test]
