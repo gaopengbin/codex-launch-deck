@@ -1,8 +1,12 @@
-import { startTransition, useDeferredValue, useEffect, useEffectEvent, useState } from 'react'
+import { startTransition, useDeferredValue, useEffect, useEffectEvent, useRef, useState } from 'react'
 import { invoke } from '@tauri-apps/api/core'
+import { listen } from '@tauri-apps/api/event'
 import { getCurrentWindow } from '@tauri-apps/api/window'
 import { openUrl } from '@tauri-apps/plugin-opener'
 import { open } from '@tauri-apps/plugin-dialog'
+import { isPermissionGranted, requestPermission, sendNotification } from '@tauri-apps/plugin-notification'
+import { relaunch } from '@tauri-apps/plugin-process'
+import { check, type Update } from '@tauri-apps/plugin-updater'
 import mikuHero from './assets/miku-hero.png'
 import kuugaHero from './assets/kuuga-hero.png'
 import tigaHero from './assets/tiga-hero.webp'
@@ -10,7 +14,17 @@ import launchDeckIcon from './assets/launch-deck-icon.png'
 import './App.css'
 
 type View = 'discover' | 'installed' | 'create' | 'settings'
-type BusyAction = 'proxy' | 'themes' | 'download' | 'launch' | 'apply' | 'restore' | 'skill' | 'auth' | 'publish' | null
+type BusyAction = 'proxy' | 'themes' | 'download' | 'launch' | 'apply' | 'restore' | 'skill' | 'auth' | 'publish' | 'update' | null
+
+type AppUpdateStatus = 'idle' | 'checking' | 'available' | 'downloading' | 'latest' | 'error'
+
+interface AppUpdateState {
+  status: AppUpdateStatus
+  version?: string
+  notes?: string
+  progress?: number
+  error?: string
+}
 
 interface ProxyConfig {
   host: string
@@ -235,6 +249,8 @@ function App() {
   const [publishInfo, setPublishInfo] = useState<ThemePublishInfo | null>(null)
   const [publishStoreUrl, setPublishStoreUrl] = useState<string | null>(null)
   const [confirmSubmit, setConfirmSubmit] = useState(false)
+  const [appUpdate, setAppUpdate] = useState<AppUpdateState>({ status: 'idle' })
+  const pendingUpdate = useRef<Update | null>(null)
   const [status, setStatus] = useState('正在连接启动台…')
   const [statusTone, setStatusTone] = useState<'idle' | 'success' | 'warning' | 'error'>('idle')
   const deferredQuery = useDeferredValue(query)
@@ -292,6 +308,118 @@ function App() {
 
   useEffect(() => {
     void loadAiState()
+  }, [])
+
+  async function checkForAppUpdate(manual = false) {
+    if (appUpdate.status === 'checking' || appUpdate.status === 'downloading') return
+    setAppUpdate({ status: 'checking' })
+    try {
+      const proxyUrl = `http://${proxy.host.trim()}:${proxy.port}`
+      let update: Update | null
+      try {
+        update = await check({ proxy: proxyUrl, timeout: 15_000 })
+      } catch {
+        update = await check({ timeout: 15_000 })
+      }
+
+      if (!update) {
+        pendingUpdate.current = null
+        setAppUpdate({ status: 'latest' })
+        if (manual) {
+          setStatus('Launch Deck 当前已是最新版本。')
+          setStatusTone('success')
+        }
+        return
+      }
+
+      pendingUpdate.current = update
+      setAppUpdate({ status: 'available', version: update.version, notes: update.body })
+      const notificationKey = 'launch-deck-notified-update'
+      if (window.localStorage.getItem(notificationKey) !== update.version) {
+        let notificationAllowed = await isPermissionGranted()
+        if (!notificationAllowed) notificationAllowed = await requestPermission() === 'granted'
+        if (notificationAllowed) {
+          sendNotification({
+            title: `Launch Deck ${update.version} 可用`,
+            body: '新版本已准备好，可在启动设置中下载并安装。',
+          })
+          window.localStorage.setItem(notificationKey, update.version)
+        }
+      }
+      if (manual) {
+        setStatus(`发现 Launch Deck ${update.version}，可在启动设置中安装。`)
+        setStatusTone('success')
+      }
+    } catch (error) {
+      const message = formatUpdateError(error)
+      setAppUpdate(manual ? { status: 'error', error: message } : { status: 'idle' })
+      if (manual) {
+        setStatus(`检查更新失败：${message}`)
+        setStatusTone('error')
+      }
+    }
+  }
+
+  async function installAppUpdate() {
+    const update = pendingUpdate.current
+    if (!update) {
+      await checkForAppUpdate(true)
+      return
+    }
+
+    setBusy('update')
+    let downloaded = 0
+    let total = 0
+    setAppUpdate((current) => ({ ...current, status: 'downloading', progress: 0 }))
+    try {
+      await update.downloadAndInstall((event) => {
+        if (event.event === 'Started') {
+          total = event.data.contentLength ?? 0
+        } else if (event.event === 'Progress') {
+          downloaded += event.data.chunkLength
+          const progress = total > 0 ? Math.min(99, Math.round((downloaded / total) * 100)) : undefined
+          setAppUpdate((current) => ({ ...current, status: 'downloading', progress }))
+        } else {
+          setAppUpdate((current) => ({ ...current, status: 'downloading', progress: 100 }))
+        }
+      }, { timeout: 120_000 })
+      await relaunch()
+    } catch (error) {
+      const message = formatError(error)
+      setAppUpdate((current) => ({ ...current, status: 'error', error: message }))
+      setStatus(`安装更新失败：${message}`)
+      setStatusTone('error')
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  const runScheduledUpdateCheck = useEffectEvent(() => {
+    void checkForAppUpdate(false)
+  })
+
+  const handleTrayUpdateRequest = useEffectEvent(() => {
+    setView('settings')
+    void checkForAppUpdate(true)
+  })
+
+  useEffect(() => {
+    let disposed = false
+    let unlistenUpdate: (() => void) | undefined
+    void listen('launch-deck://check-update', () => {
+      handleTrayUpdateRequest()
+    }).then((unlisten) => {
+      if (disposed) unlisten()
+      else unlistenUpdate = unlisten
+    })
+    const startupTimer = window.setTimeout(runScheduledUpdateCheck, 2500)
+    const interval = window.setInterval(runScheduledUpdateCheck, 6 * 60 * 60 * 1000)
+    return () => {
+      disposed = true
+      unlistenUpdate?.()
+      window.clearTimeout(startupTimer)
+      window.clearInterval(interval)
+    }
   }, [])
 
   const selectedThemePublishable = Boolean(selectedTheme.generated || selectedTheme.bundled)
@@ -836,9 +964,12 @@ function App() {
         ) : (
           <SettingsPanel
             appState={appState}
+            appUpdate={appUpdate}
             busy={busy}
             onRestore={() => void restore()}
             onOpenStore={() => void openUrl('https://codedrobe.app/download')}
+            onCheckUpdate={() => void checkForAppUpdate(true)}
+            onInstallUpdate={() => void installAppUpdate()}
           />
         )}
       </main>
@@ -1148,7 +1279,28 @@ function AiCreatePanel({ capability, prompt, appearance, visualMode, imagePath, 
   )
 }
 
-function SettingsPanel({ appState, busy, onRestore, onOpenStore }: { appState: AppState; busy: BusyAction; onRestore: () => void; onOpenStore: () => void }) {
+function SettingsPanel({ appState, appUpdate, busy, onRestore, onOpenStore, onCheckUpdate, onInstallUpdate }: {
+  appState: AppState
+  appUpdate: AppUpdateState
+  busy: BusyAction
+  onRestore: () => void
+  onOpenStore: () => void
+  onCheckUpdate: () => void
+  onInstallUpdate: () => void
+}) {
+  const updateCopy = appUpdate.status === 'checking'
+    ? '正在安全检查 GitHub Release…'
+    : appUpdate.status === 'available'
+      ? `发现新版本 ${appUpdate.version}，安装完成后会自动重启。`
+      : appUpdate.status === 'downloading'
+        ? `正在下载并校验更新${appUpdate.progress === undefined ? '…' : ` ${appUpdate.progress}%`}`
+        : appUpdate.status === 'latest'
+          ? '当前已是最新版本。'
+          : appUpdate.status === 'error'
+            ? `暂时无法检查更新：${appUpdate.error}`
+            : '启动后自动检查更新；有新版本时会通过系统通知提醒。'
+  const updateBusy = appUpdate.status === 'checking' || appUpdate.status === 'downloading'
+
   return (
     <section className="settings-panel">
       <header>
@@ -1174,6 +1326,30 @@ function SettingsPanel({ appState, busy, onRestore, onOpenStore }: { appState: A
           <h3>CodeDrobe 创作者连接</h3>
           <p>Launch Deck 已支持通过官方 CLI 登录和发布内置或本地创作主题；完整商店与跨应用管理仍可使用 CodeDrobe Desktop。</p>
           <button className="secondary" onClick={onOpenStore}>下载 CodeDrobe Desktop</button>
+        </article>
+        <article className="update-setting">
+          <span className="setting-number">04</span>
+          <h3>应用更新</h3>
+          <p>{updateCopy}</p>
+          {appUpdate.notes && appUpdate.status === 'available' && <p className="update-notes">{appUpdate.notes}</p>}
+          {appUpdate.status === 'downloading' && appUpdate.progress !== undefined && (
+            <div className="update-progress" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={appUpdate.progress}>
+              <i style={{ width: `${appUpdate.progress}%` }} />
+            </div>
+          )}
+          <button
+            className={appUpdate.status === 'available' ? 'secondary' : undefined}
+            onClick={appUpdate.status === 'available' ? onInstallUpdate : onCheckUpdate}
+            disabled={busy !== null || updateBusy}
+          >
+            {appUpdate.status === 'available'
+              ? `下载并安装 v${appUpdate.version}`
+              : appUpdate.status === 'downloading'
+                ? '正在安装…'
+                : appUpdate.status === 'checking'
+                  ? '正在检查…'
+                  : '检查更新'}
+          </button>
         </article>
       </div>
     </section>
@@ -1213,6 +1389,14 @@ function formatError(error: unknown) {
   if (typeof error === 'string') return error
   if (error instanceof Error) return error.message
   return '操作失败，请检查代理和 CodeDrobe 环境。'
+}
+
+function formatUpdateError(error: unknown) {
+  const message = formatError(error).toLowerCase()
+  if (message.includes('timed out') || message.includes('timeout')) {
+    return '连接更新服务超时，请稍后重试。'
+  }
+  return '暂时无法连接更新服务，请稍后重试。'
 }
 
 function hideBrokenImage(event: React.SyntheticEvent<HTMLImageElement>) {

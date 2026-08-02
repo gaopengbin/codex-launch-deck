@@ -1,7 +1,7 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "Codex Proxy Launch Deck",
-  "version": "2.2.4",
+  "version": "2.3.0",
   "identifier": "dev.geod.codex-launch-deck",
   "build": {
     "frontendDist": "../dist",
@@ -30,6 +30,7 @@
   },
   "bundle": {
     "active": true,
+    "createUpdaterArtifacts": true,
     "targets": ["nsis", "msi"],
     "resources": {
       "../../themes/miku-future-beats-1.2.3.codedrobe-theme": "themes/miku-future-beats-1.2.3.codedrobe-theme",
@@ -46,6 +47,17 @@
     ],
     "android": {
       "debugApplicationIdSuffix": ".debug"
+    }
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEMzQkEzOTNFQ0EyRTFEMzUKUldRMUhTN0tQam02d3lBNDNlOWMzWEpadG1WcEdmYWUzVHFRWExZRmxlVUI4bXgxQWpQamxscVAK",
+      "endpoints": [
+        "https://github.com/gaopengbin/codex-launch-deck/releases/latest/download/latest.json"
+      ],
+      "windows": {
+        "installMode": "passive"
+      }
     }
   }
 }

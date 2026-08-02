@@ -344,7 +344,7 @@ main { min-width: 0; max-height: calc(100vh - 38px); overflow: auto; padding: 22
 .settings-panel { padding: 30px 8px; }
 .settings-panel header { max-width: 620px; }
 .settings-panel header > p { color: var(--ink-soft); font-size: 12px; line-height: 1.7; }
-.settings-grid { margin-top: 24px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 13px; }
+.settings-grid { margin-top: 24px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 13px; }
 .settings-grid article { min-height: 230px; padding: 20px; display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: 13px 13px 32px 13px; background: rgba(255,255,255,.68); }
 .setting-number { color: var(--teal); font: 800 10px/1 var(--font-label); }
 .settings-grid h3 { margin: 22px 0 8px; font: 700 16px/1.3 var(--font-ui); }
@@ -352,6 +352,10 @@ main { min-width: 0; max-height: calc(100vh - 38px); overflow: auto; padding: 22
 .settings-grid code { margin-top: auto; padding: 10px; overflow-wrap: anywhere; border-radius: 7px; background: #e8eee7; color: #42605a; font-size: 9px; }
 .settings-grid button { margin-top: auto; min-height: 37px; border: 0; border-radius: 7px; background: var(--ink); color: white; cursor: pointer; font-size: 11px; }
 .settings-grid button.secondary { background: var(--signal); color: var(--ink); }
+.update-notes { max-height: 56px; margin: 0 0 8px; overflow: auto; white-space: pre-line; }
+.update-progress { height: 5px; margin: auto 0 10px; overflow: hidden; border-radius: 10px; background: rgba(20,26,36,.09); }
+.update-progress i { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, var(--teal), var(--signal)); transition: width .22s ease; }
+.update-setting button:disabled { opacity: .55; cursor: wait; }
 
 .ai-create-panel { padding: 28px 5px 10px; }
 .ai-create-header { display: grid; grid-template-columns: minmax(0, 1fr) 260px; gap: 24px; align-items: end; }

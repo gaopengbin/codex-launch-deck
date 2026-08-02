@@ -14,11 +14,19 @@ use std::{
     net::{TcpListener, TcpStream, ToSocketAddrs},
     path::{Path, PathBuf},
     process::{Child, Command, Output, Stdio},
-    sync::{Arc, Mutex},
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc, Mutex,
+    },
     thread,
     time::{Duration, Instant},
 };
-use tauri::{AppHandle, Manager, State};
+use tauri::{
+    menu::{Menu, MenuItem},
+    tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
+    AppHandle, Emitter, Manager, State,
+};
+use tauri_plugin_notification::NotificationExt;
 use tungstenite::{connect as connect_websocket, Message};
 
 #[cfg(target_os = "windows")]
@@ -236,6 +244,12 @@ struct GeneratedThemeRecord {
 struct WatcherState {
     child: Arc<Mutex<Option<Child>>>,
     port: Arc<Mutex<Option<u16>>>,
+}
+
+#[derive(Default)]
+struct AppLifecycleState {
+    quitting: AtomicBool,
+    tray_hint_shown: AtomicBool,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -3198,13 +3212,75 @@ fn quote_cmd(value: &str) -> String {
     format!("\"{}\"", value.replace('"', "\"\""))
 }
 
+fn show_main_window(app: &AppHandle) {
+    if let Some(window) = app.get_webview_window("main") {
+        let _ = window.unminimize();
+        let _ = window.show();
+        let _ = window.set_focus();
+    }
+}
+
+fn setup_tray(app: &mut tauri::App) -> tauri::Result<()> {
+    let open_item = MenuItem::with_id(app, "open", "打开启动台", true, None::<&str>)?;
+    let update_item = MenuItem::with_id(app, "update", "检查更新", true, None::<&str>)?;
+    let quit_item = MenuItem::with_id(app, "quit", "退出 Launch Deck", true, None::<&str>)?;
+    let menu = Menu::with_items(app, &[&open_item, &update_item, &quit_item])?;
+
+    let mut tray = TrayIconBuilder::new()
+        .tooltip("Codex Proxy Launch Deck")
+        .menu(&menu)
+        .show_menu_on_left_click(false)
+        .on_menu_event(|app, event| match event.id.as_ref() {
+            "open" => show_main_window(app),
+            "update" => {
+                show_main_window(app);
+                let _ = app.emit("launch-deck://check-update", ());
+            }
+            "quit" => {
+                app.state::<AppLifecycleState>()
+                    .quitting
+                    .store(true, Ordering::SeqCst);
+                app.exit(0);
+            }
+            _ => {}
+        })
+        .on_tray_icon_event(|tray, event| {
+            if matches!(
+                event,
+                TrayIconEvent::Click {
+                    button: MouseButton::Left,
+                    button_state: MouseButtonState::Up,
+                    ..
+                } | TrayIconEvent::DoubleClick {
+                    button: MouseButton::Left,
+                    ..
+                }
+            ) {
+                show_main_window(tray.app_handle());
+            }
+        });
+    if let Some(icon) = app.default_window_icon() {
+        tray = tray.icon(icon.clone());
+    }
+    tray.build(app)?;
+    Ok(())
+}
+
 pub fn run() {
     let app = tauri::Builder::default()
         .manage(WatcherState::default())
         .manage(AiThemeState::default())
+        .manage(AppLifecycleState::default())
+        .plugin(tauri_plugin_single_instance::init(|app, _, _| {
+            show_main_window(app);
+        }))
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_process::init())
+        .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
+            setup_tray(app)?;
             if cfg!(debug_assertions) {
                 app.handle().plugin(
                     tauri_plugin_log::Builder::default()
@@ -3237,11 +3313,36 @@ pub fn run() {
         .build(tauri::generate_context!())
         .expect("error while building Codex Proxy Launch Deck");
 
-    app.run(|app_handle, event| {
-        if matches!(event, tauri::RunEvent::Exit) {
+    app.run(|app_handle, event| match event {
+        tauri::RunEvent::WindowEvent {
+            label,
+            event: tauri::WindowEvent::CloseRequested { api, .. },
+            ..
+        } if label == "main"
+            && !app_handle
+                .state::<AppLifecycleState>()
+                .quitting
+                .load(Ordering::SeqCst) =>
+        {
+            api.prevent_close();
+            if let Some(window) = app_handle.get_webview_window("main") {
+                let _ = window.hide();
+            }
+            let lifecycle = app_handle.state::<AppLifecycleState>();
+            if !lifecycle.tray_hint_shown.swap(true, Ordering::SeqCst) {
+                let _ = app_handle
+                    .notification()
+                    .builder()
+                    .title("Launch Deck 仍在后台运行")
+                    .body("主题守护与更新检查会继续运行，可从系统托盘重新打开。")
+                    .show();
+            }
+        }
+        tauri::RunEvent::Exit => {
             let watcher = app_handle.state::<WatcherState>();
             let _ = stop_watcher(&watcher);
         }
+        _ => {}
     });
 }
 
