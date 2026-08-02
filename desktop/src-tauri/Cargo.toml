@@ -1,6 +1,6 @@
 [package]
 name = "codex-launch-deck"
-version = "2.2.1"
+version = "2.2.2"
 description = "Launch Codex through a local proxy and apply CodeDrobe themes."
 authors = ["GeoD"]
 license = "MIT"

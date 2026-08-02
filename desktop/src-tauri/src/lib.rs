@@ -5,6 +5,7 @@ use reqwest::{Client, Url};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::{
+    borrow::Cow,
     collections::HashMap,
     env,
     ffi::OsStr,
@@ -2879,13 +2880,28 @@ fn compatibility_codedrobe_command(args: &[&str], package: &Path) -> Result<Comm
     let (node, npx_cli) =
         find_npx_runtime().ok_or_else(|| "CodeDrobe 兼容层需要 Node.js / npx。".to_string())?;
     let mut command = background_command(node);
+    let package_text = package.to_string_lossy();
+    let package_argument = normalize_windows_cli_argument(package_text.as_ref());
     command
         .arg(npx_cli)
         .args(["--yes", "--package"])
-        .arg(package)
-        .arg("codedrobe")
-        .args(args);
+        .arg(package_argument.as_ref())
+        .arg("codedrobe");
+    for argument in args {
+        let argument = normalize_windows_cli_argument(argument);
+        command.arg(argument.as_ref());
+    }
     Ok(command)
+}
+
+fn normalize_windows_cli_argument(value: &str) -> Cow<'_, str> {
+    if let Some(path) = value.strip_prefix(r"\\?\UNC\") {
+        return Cow::Owned(format!(r"\\{path}"));
+    }
+    value
+        .strip_prefix(r"\\?\")
+        .map(Cow::Borrowed)
+        .unwrap_or(Cow::Borrowed(value))
 }
 
 fn find_npx_runtime() -> Option<(PathBuf, PathBuf)> {
@@ -3277,6 +3293,22 @@ mod tests {
         let candidates = desktop_executable_candidates(Path::new(r"C:\OpenAI.Codex"));
         assert!(candidates[0].ends_with(r"app\ChatGPT.exe"));
         assert!(candidates[1].ends_with(r"app\Codex.exe"));
+    }
+
+    #[test]
+    fn removes_windows_verbatim_prefixes_before_calling_node() {
+        assert_eq!(
+            normalize_windows_cli_argument(r"\\?\C:\Launch Deck\compat\core.tgz"),
+            r"C:\Launch Deck\compat\core.tgz"
+        );
+        assert_eq!(
+            normalize_windows_cli_argument(r"\\?\UNC\server\share\theme.json"),
+            r"\\server\share\theme.json"
+        );
+        assert_eq!(
+            normalize_windows_cli_argument(r"C:\Launch Deck\theme.json"),
+            r"C:\Launch Deck\theme.json"
+        );
     }
 
     #[test]
