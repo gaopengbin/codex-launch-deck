@@ -293,6 +293,12 @@ function App() {
     void loadCodeDrobeAuth()
   }, [])
 
+  useEffect(() => {
+    const refreshAuth = () => void loadCodeDrobeAuth()
+    window.addEventListener('focus', refreshAuth)
+    return () => window.removeEventListener('focus', refreshAuth)
+  }, [])
+
   const loadAiState = useEffectEvent(async () => {
     try {
       const [generatedThemes, capability] = await Promise.all([
@@ -824,6 +830,43 @@ function App() {
           </button>
         </nav>
 
+        <section className={`account-card ${codedrobeAuth.loggedIn ? 'connected' : ''}`}>
+          <div className="account-card-head">
+            <span className="account-avatar">
+              {codedrobeAuth.creatorHandle?.slice(0, 1).toLocaleUpperCase() || 'C'}
+            </span>
+            <div>
+              <small>CODEDROBE ACCOUNT</small>
+              <strong>
+                {!codedrobeAuth.loggedIn
+                  ? '尚未连接'
+                  : codedrobeAuth.creatorHandle
+                    ? `@${codedrobeAuth.creatorHandle}`
+                    : '账号已连接'}
+              </strong>
+            </div>
+            <i aria-label={codedrobeAuth.loggedIn ? '已登录' : '未登录'} />
+          </div>
+          <div className="account-card-foot">
+            <span>
+              {!codedrobeAuth.loggedIn
+                ? '登录后可发布主题'
+                : codedrobeAuth.creatorHandle
+                  ? '创作者身份已就绪'
+                  : '待完善创作者资料'}
+            </span>
+            {!codedrobeAuth.loggedIn ? (
+              <button onClick={() => void loginCodeDrobe()} disabled={busy !== null}>
+                {busy === 'auth' ? '连接中…' : '登录'}
+              </button>
+            ) : !codedrobeAuth.creatorHandle ? (
+              <button onClick={() => void openUrl(`${codedrobeAuth.baseUrl}/zh/account`)} disabled={busy !== null}>完善</button>
+            ) : (
+              <button onClick={() => void logoutCodeDrobe()} disabled={busy !== null}>退出</button>
+            )}
+          </div>
+        </section>
+
         <div className="system-card">
           <div className="system-card-title"><Icon name="pulse" />运行环境</div>
           <StatusRow label="Codex Desktop" ok={appState.codexInstalled} />
@@ -1016,9 +1059,6 @@ function App() {
                     <span>CREATOR PUBLISH</span>
                     <strong>发布到 CodeDrobe</strong>
                   </div>
-                  <span className={`auth-chip ${codedrobeAuth.creatorHandle ? 'online' : ''}`}>
-                    {!codedrobeAuth.loggedIn ? '未登录' : codedrobeAuth.creatorHandle ? `@${codedrobeAuth.creatorHandle}` : '待完善'}
-                  </span>
                 </div>
                 <p>通过官方 CLI 安全连接。Launch Deck 不读取、不保存你的账号凭据。</p>
                 {publishInfo === null ? (
@@ -1057,7 +1097,6 @@ function App() {
                     <button className="profile-refresh" onClick={() => void refreshCodeDrobeProfile()} disabled={busy !== null}>
                       {busy === 'auth' ? '检查中…' : '我已完成，重新检查'}
                     </button>
-                    <button className="publisher-logout" onClick={() => void logoutCodeDrobe()} disabled={busy !== null}>退出 CodeDrobe</button>
                   </div>
                 ) : (
                   <>
@@ -1078,7 +1117,6 @@ function App() {
                         </div>
                       </div>
                     )}
-                    <button className="publisher-logout" onClick={() => void logoutCodeDrobe()} disabled={busy !== null}>退出 CodeDrobe</button>
                   </>
                 )}
                 {publishStoreUrl && (
