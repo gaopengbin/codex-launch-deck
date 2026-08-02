@@ -29,22 +29,22 @@ const CODEDROBE_PORT: u16 = 9335;
 const BUNDLED_THEMES: &[(&str, &str, &str)] = &[
     (
         "miku-future-beats",
-        "1.2.2",
-        "miku-future-beats-1.2.2.codedrobe-theme",
+        "1.2.3",
+        "miku-future-beats-1.2.3.codedrobe-theme",
     ),
     (
         "kuuga-crimson-awakening",
-        "1.2.0",
-        "kuuga-crimson-awakening-1.2.0.codedrobe-theme",
+        "1.2.1",
+        "kuuga-crimson-awakening-1.2.1.codedrobe-theme",
     ),
     (
         "tiga-starlight-awakening",
-        "1.1.2",
-        "tiga-starlight-awakening-1.1.2.codedrobe-theme",
+        "1.1.3",
+        "tiga-starlight-awakening-1.1.3.codedrobe-theme",
     ),
 ];
-const COMPAT_CORE_FILE: &str = "codedrobe-core-0.7.0-beta.0.tgz";
-const COMPAT_CORE_SHA256: &str = "b9ec7a467ac1e30f5879feff3bd6d35d3e68d3ce63db20e98c4fba379e91a354";
+const COMPAT_CORE_FILE: &str = "codedrobe-core-0.7.0-beta.0-launchdeck.2.tgz";
+const COMPAT_CORE_SHA256: &str = "1197e73b068f00c990d5d60b3c4245b2e6b114b2dc7835280b69662759276e1d";
 const AI_THEME_COMPONENT_COVERAGE_REFERENCE: &str = r#"
 
 /* Launch Deck coverage contract for Codex 26.721+.

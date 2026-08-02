@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "tiga-starlight-awakening",
   "displayName": "迪迦 · 星辉觉醒",
-  "version": "1.1.2",
+  "version": "1.1.3",
   "catalog": {
     "name": {
       "en": "Tiga · Starlight Awakening",
@@ -45,7 +45,7 @@
           {
             "name": "home",
             "when": {
-              "any": ["main.main-surface.dream-home-shell"]
+              "any": ["[data-feature='game-source']", ".group\\/home-suggestions", ".group\\/project-selector"]
             },
             "recommended": [
               {
@@ -57,7 +57,7 @@
           {
             "name": "conversation",
             "when": {
-              "any": ["main.main-surface:not(.dream-home-shell)"]
+              "any": ["#root main:not(:has([data-feature='game-source'], .group\\/home-suggestions, .group\\/project-selector))"]
             },
             "recommended": [
               {

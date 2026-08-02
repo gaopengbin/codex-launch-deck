@@ -116,7 +116,7 @@ const bundledThemes: Theme[] = [{
     zh: '初音未来 · Future Beats',
     en: 'Hatsune Miku · Future Beats',
   },
-  version: '1.2.2',
+  version: '1.2.3',
   description: {
     zh: '冰青、樱粉与未来节拍交织的全幅主题，随启动器离线提供。',
     en: 'An ice-teal and sakura-pink full-window theme bundled for offline use.',
@@ -138,7 +138,7 @@ const bundledThemes: Theme[] = [{
     zh: '空我 · 赤焰觉醒',
     en: 'Kuuga · Crimson Awakening',
   },
-  version: '1.2.0',
+  version: '1.2.1',
   description: {
     zh: '烟黑金属、深绯装甲与克制旧金高光构成的电影感暗色工作台。',
     en: 'A cinematic dark workstation forged from smoke-black metal, crimson armor, and restrained antique-gold highlights.',
@@ -160,7 +160,7 @@ const bundledThemes: Theme[] = [{
     zh: '迪迦 · 星辉觉醒',
     en: 'Tiga · Starlight Awakening',
   },
-  version: '1.1.2',
+  version: '1.1.3',
   description: {
     zh: '经典银色装甲、午夜城市与冰蓝能量核心构成的电影感暗色工作台。',
     en: 'A cinematic night-city workstation shaped by classic silver armor, midnight haze, and an icy-cyan energy core.',

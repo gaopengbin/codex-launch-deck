@@ -191,7 +191,7 @@ html.codedrobe-host-codex header.app-header-tint {
   backdrop-filter: blur(22px) saturate(1.12);
 }
 
-html.codedrobe-host-codex main.main-surface > header.app-header-tint > div.flex-1.isolate::before {
+html.codedrobe-host-codex main.main-surface > header.app-header-tint > [data-testid="app-shell-header-context-menu-surface"]::before {
   position: absolute;
   z-index: 2;
   top: 7px;

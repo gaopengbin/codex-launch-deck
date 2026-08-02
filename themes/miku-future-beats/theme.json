@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "miku-future-beats",
   "displayName": "初音未来 · Future Beats",
-  "version": "1.2.2",
+  "version": "1.2.3",
   "catalog": {
     "name": { "en": "Hatsune Miku · Future Beats", "zh": "初音未来 · Future Beats" },
     "description": {
@@ -57,13 +57,11 @@
             "when": {
               "any": ["[data-feature='game-source']", ".group\\/home-suggestions", ".group\\/project-selector"]
             },
-            "required": [
+            "recommended": [
               {
                 "name": "home-hero-shell",
-                "any": ["main.main-surface.dream-home-shell"]
-              }
-            ],
-            "recommended": [
+                "any": ["main.dream-home-shell"]
+              },
               {
                 "name": "home-suggestions",
                 "any": [".group\\/home-suggestions"]
@@ -77,12 +75,12 @@
           {
             "name": "conversation",
             "when": {
-              "any": ["main.main-surface:not(.dream-home-shell)"]
+              "any": ["#root main:not(:has([data-feature='game-source'], .group\\/home-suggestions, .group\\/project-selector))"]
             },
             "recommended": [
               {
                 "name": "conversation-theme-topbar",
-                "any": ["main.main-surface > header.app-header-tint > div.flex-1.isolate"]
+                "any": ["main.main-surface > header.app-header-tint > [data-testid='app-shell-header-context-menu-surface']"]
               },
               {
                 "name": "conversation-composer",

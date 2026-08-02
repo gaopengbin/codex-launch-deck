@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "kuuga-crimson-awakening",
   "displayName": "空我 · 赤焰觉醒",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "catalog": {
     "name": {
       "en": "Kuuga · Crimson Awakening",
@@ -45,7 +45,7 @@
           {
             "name": "home",
             "when": {
-              "any": ["main.main-surface.dream-home-shell"]
+              "any": ["[data-feature='game-source']", ".group\\/home-suggestions", ".group\\/project-selector"]
             },
             "recommended": [
               {
@@ -57,7 +57,7 @@
           {
             "name": "conversation",
             "when": {
-              "any": ["main.main-surface:not(.dream-home-shell)"]
+              "any": ["#root main:not(:has([data-feature='game-source'], .group\\/home-suggestions, .group\\/project-selector))"]
             },
             "recommended": [
               {

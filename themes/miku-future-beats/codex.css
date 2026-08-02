@@ -547,7 +547,7 @@ html.codedrobe-codex-skin main.main-surface > header.app-header-tint {
 }
 
 html.codedrobe-codex-skin
-  main.main-surface > header.app-header-tint > div.flex-1.isolate::before {
+  main.main-surface > header.app-header-tint > [data-testid="app-shell-header-context-menu-surface"]::before {
   content: "♫  Miku Future Beats · 灵感同频中";
   position: absolute;
   left: 50%;
