@@ -831,13 +831,7 @@ fn launch_codex_blocking(
             warning: runtime_warning.is_some(),
         })
     } else {
-        let executable = find_codex_executable()
-            .ok_or_else(|| "未找到 Codex / ChatGPT Windows 桌面应用。".to_string())?;
-        let mut command = Command::new(executable);
-        apply_proxy_environment(&mut command, &request.proxy);
-        command
-            .spawn()
-            .map_err(|error| format!("启动 Codex 失败：{error}"))?;
+        launch_codex_desktop(&request.proxy)?;
         Ok(ActionResult {
             message: "Codex 已通过代理启动".to_string(),
             theme_path: None,
@@ -3065,8 +3059,12 @@ fn is_windowsapps_path(path: &Path) -> bool {
 }
 
 fn find_codex_executable() -> Option<PathBuf> {
+    find_codex_executables().into_iter().next()
+}
+
+fn find_codex_executables() -> Vec<PathBuf> {
     let script = "$p=@(Get-AppxPackage -Name 'OpenAI.Codex';Get-AppxPackage -Name 'OpenAI.ChatGPT-Desktop')|Sort-Object Version -Descending|Select-Object -First 1;if($p){$p.InstallLocation}";
-    let output = background_command("powershell.exe")
+    let Some(output) = background_command("powershell.exe")
         .args([
             "-NoLogo",
             "-NoProfile",
@@ -3075,15 +3073,47 @@ fn find_codex_executable() -> Option<PathBuf> {
             script,
         ])
         .output()
-        .ok()?;
+        .ok()
+    else {
+        return Vec::new();
+    };
     if !output.status.success() {
-        return None;
+        return Vec::new();
     }
     let location = String::from_utf8_lossy(&output.stdout).trim().to_string();
-    ["Codex.exe", "ChatGPT.exe"]
-        .iter()
-        .map(|name| PathBuf::from(&location).join("app").join(name))
-        .find(|candidate| candidate.is_file())
+    desktop_executable_candidates(Path::new(&location))
+        .into_iter()
+        .filter(|candidate| candidate.is_file())
+        .collect()
+}
+
+fn desktop_executable_candidates(location: &Path) -> [PathBuf; 2] {
+    ["ChatGPT.exe", "Codex.exe"].map(|name| location.join("app").join(name))
+}
+
+fn launch_codex_desktop(proxy: &ProxyConfig) -> Result<PathBuf, String> {
+    let candidates = find_codex_executables();
+    if candidates.is_empty() {
+        return Err("未找到 Codex / ChatGPT Windows 桌面应用。".to_string());
+    }
+
+    let mut failures = Vec::new();
+    for executable in candidates {
+        let mut command = Command::new(&executable);
+        apply_proxy_environment(&mut command, proxy);
+        match command.spawn() {
+            Ok(_) => return Ok(executable),
+            Err(error) => failures.push(format!(
+                "{}：{error}",
+                executable
+                    .file_name()
+                    .and_then(|name| name.to_str())
+                    .unwrap_or("未知入口")
+            )),
+        }
+    }
+
+    Err(format!("启动 Codex 失败：{}", failures.join("；")))
 }
 
 fn is_codex_running() -> bool {
@@ -3240,6 +3270,13 @@ mod tests {
         assert!(!is_windowsapps_path(Path::new(
             r"C:\Users\user\.vscode\extensions\openai.chatgpt-1.0.0\bin\windows-x86_64\codex.exe"
         )));
+    }
+
+    #[test]
+    fn prefers_the_real_chatgpt_desktop_entrypoint() {
+        let candidates = desktop_executable_candidates(Path::new(r"C:\OpenAI.Codex"));
+        assert!(candidates[0].ends_with(r"app\ChatGPT.exe"));
+        assert!(candidates[1].ends_with(r"app\Codex.exe"));
     }
 
     #[test]
