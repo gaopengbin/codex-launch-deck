@@ -140,7 +140,7 @@ const bundledThemes: Theme[] = [{
   coverUrl: mikuHero,
   publishedAt: '',
   supportedApps: ['codex'],
-  author: { handle: 'local', displayName: 'Launch Deck' },
+  author: { handle: 'local', displayName: '启动台' },
   likeCount: 0,
   downloadCount: 0,
   bundled: true,
@@ -162,7 +162,7 @@ const bundledThemes: Theme[] = [{
   coverUrl: kuugaHero,
   publishedAt: '',
   supportedApps: ['codex'],
-  author: { handle: 'local', displayName: 'Launch Deck' },
+  author: { handle: 'local', displayName: '启动台' },
   likeCount: 0,
   downloadCount: 0,
   bundled: true,
@@ -184,7 +184,7 @@ const bundledThemes: Theme[] = [{
   coverUrl: tigaHero,
   publishedAt: '',
   supportedApps: ['codex'],
-  author: { handle: 'local', displayName: 'Launch Deck' },
+  author: { handle: 'local', displayName: '启动台' },
   likeCount: 0,
   downloadCount: 0,
   bundled: true,
@@ -233,6 +233,7 @@ function App() {
   const [proxy, setProxy] = useState<ProxyConfig>({ host: '127.0.0.1', port: 10808 })
   const [appState, setAppState] = useState<AppState>(initialState)
   const [themes, setThemes] = useState<Theme[]>(bundledThemes)
+  const [marketplaceThemes, setMarketplaceThemes] = useState<Theme[]>([])
   const [selectedTheme, setSelectedTheme] = useState<Theme>(defaultTheme)
   const [themeEnabled, setThemeEnabled] = useState(true)
   const [query, setQuery] = useState('')
@@ -265,6 +266,7 @@ function App() {
       ])
       startTransition(() => {
         setAppState(state)
+        setMarketplaceThemes(page.themes)
         setThemes((current) => mergeThemes(current.filter((theme) => theme.generated), page.themes))
       })
       setStatus(`已连接 CodeDrobe 商店，共 ${page.total} 个 Codex 主题`)
@@ -332,7 +334,7 @@ function App() {
         pendingUpdate.current = null
         setAppUpdate({ status: 'latest' })
         if (manual) {
-          setStatus('Launch Deck 当前已是最新版本。')
+          setStatus('启动台当前已是最新版本。')
           setStatusTone('success')
         }
         return
@@ -346,14 +348,14 @@ function App() {
         if (!notificationAllowed) notificationAllowed = await requestPermission() === 'granted'
         if (notificationAllowed) {
           sendNotification({
-            title: `Launch Deck ${update.version} 可用`,
+            title: `启动台 ${update.version} 可用`,
             body: '新版本已准备好，可在启动设置中下载并安装。',
           })
           window.localStorage.setItem(notificationKey, update.version)
         }
       }
       if (manual) {
-        setStatus(`发现 Launch Deck ${update.version}，可在启动设置中安装。`)
+        setStatus(`发现启动台 ${update.version}，可在启动设置中安装。`)
         setStatusTone('success')
       }
     } catch (error) {
@@ -429,6 +431,21 @@ function App() {
   }, [])
 
   const selectedThemePublishable = Boolean(selectedTheme.generated || selectedTheme.bundled)
+  const publishedMarketplaceTheme = selectedThemePublishable
+    ? marketplaceThemes.find((theme) => theme.slug === selectedTheme.slug)
+    : undefined
+  const publishedThemeOwnedByCreator = Boolean(
+    publishedMarketplaceTheme
+    && codedrobeAuth.creatorHandle
+    && publishedMarketplaceTheme.author?.handle.toLocaleLowerCase() === codedrobeAuth.creatorHandle.toLocaleLowerCase(),
+  )
+  const selectedThemeHasUpdate = Boolean(
+    publishedMarketplaceTheme
+    && publishedThemeOwnedByCreator
+    && compareThemeVersions(selectedTheme.version, publishedMarketplaceTheme.version) > 0,
+  )
+  const showPublisherCard = selectedThemePublishable
+    && (!publishedMarketplaceTheme || selectedThemeHasUpdate)
   const selectedPublishKey = selectedThemePublishable
     ? `${selectedTheme.slug}@${selectedTheme.version}`
     : null
@@ -513,6 +530,7 @@ function App() {
     try {
       const page = await invoke<MarketplacePage>('list_themes', { proxy })
       startTransition(() => {
+        setMarketplaceThemes(page.themes)
         setThemes((current) => mergeThemes(current.filter((theme) => theme.generated), page.themes))
       })
       setStatus(`主题商店已刷新，共 ${page.total} 个 Codex 主题`)
@@ -582,7 +600,7 @@ function App() {
 
   async function installAiSkill() {
     setBusy('skill')
-    setStatus('正在安装 CodeDrobe 主题创作 Skill…')
+    setStatus('正在安装 CodeDrobe 主题创作技能…')
     setStatusTone('idle')
     try {
       const capability = await invoke<AiThemeCapability>('install_ai_theme_skill')
@@ -729,7 +747,7 @@ function App() {
       const auth = await invoke<CodeDrobeAuthStatus>('logout_codedrobe', { proxy })
       setCodeDrobeAuth(auth)
       setConfirmSubmit(false)
-      setStatus('已退出 CodeDrobe，Launch Deck 未保存任何登录凭据。')
+      setStatus('已退出 CodeDrobe，启动台未保存任何登录凭据。')
       setStatusTone('success')
     } catch (error) {
       setStatus(formatError(error))
@@ -764,7 +782,9 @@ function App() {
   async function publishSelectedTheme(submit: boolean) {
     if (!selectedThemePublishable || !publishInfo?.ready) return
     setBusy('publish')
-    setStatus(submit ? '正在提交 CodeDrobe 商店审核…' : '正在上传 CodeDrobe 主题草稿…')
+    setStatus(selectedThemeHasUpdate
+      ? (submit ? '正在提交 CodeDrobe 主题更新审核…' : '正在上传 CodeDrobe 主题更新…')
+      : (submit ? '正在提交 CodeDrobe 商店审核…' : '正在上传 CodeDrobe 主题草稿…'))
     setStatusTone('idle')
     try {
       const result = await invoke<ThemePublishResult>('publish_generated_theme', {
@@ -810,8 +830,8 @@ function App() {
         <div className="brand">
           <div className="brand-mark"><img src={launchDeckIcon} alt="" /></div>
           <div>
-            <strong>LAUNCH DECK</strong>
-            <small>Codex Proxy Studio</small>
+            <strong>启动台</strong>
+            <small>Codex 代理与主题</small>
           </div>
         </div>
 
@@ -836,7 +856,7 @@ function App() {
               {codedrobeAuth.creatorHandle?.slice(0, 1).toLocaleUpperCase() || 'C'}
             </span>
             <div>
-              <small>CODEDROBE ACCOUNT</small>
+              <small>CodeDrobe 账号</small>
               <strong>
                 {!codedrobeAuth.loggedIn
                   ? '尚未连接'
@@ -869,31 +889,31 @@ function App() {
 
         <div className="system-card">
           <div className="system-card-title"><Icon name="pulse" />运行环境</div>
-          <StatusRow label="Codex Desktop" ok={appState.codexInstalled} />
-          <StatusRow label="CodeDrobe Core" ok={appState.codedrobeAvailable} />
+          <StatusRow label="Codex 桌面端" ok={appState.codexInstalled} />
+          <StatusRow label="CodeDrobe 核心" ok={appState.codedrobeAvailable} />
           <StatusRow label="Codex 进程" ok={appState.codexRunning} running />
         </div>
 
         <button className="official-link" onClick={() => void openUrl('https://codedrobe.app/themes')}>
           <span>CodeDrobe 官方商店</span><Icon name="arrow" />
         </button>
-        <div className="sidebar-foot">LOCAL FIRST · REVERSIBLE</div>
+        <div className="sidebar-foot">本地优先 · 随时恢复</div>
       </aside>
 
       <main>
         <section className="launch-ribbon">
           <div className="launch-copy">
-            <span className="eyebrow"><i /> CODEX LAUNCH CONTROL</span>
+            <span className="eyebrow"><i /> Codex 启动控制</span>
             <h1>一次启动，<em>代理与主题</em>同时就绪。</h1>
-            <p>不改变 Windows 系统代理。主题由 CodeDrobe Core 校验、应用并可随时恢复。</p>
+            <p>不改变 Windows 系统代理。主题由 CodeDrobe 核心校验、应用并可随时恢复。</p>
           </div>
           <div className="proxy-console">
             <label>
-              <span>PROXY HOST</span>
+              <span>代理主机</span>
               <input value={proxy.host} onChange={(event) => setProxy({ ...proxy, host: event.target.value })} />
             </label>
             <div className="port-field">
-              <span>PORT</span>
+              <span>端口</span>
               <div className="port-control">
                 <button type="button" onClick={() => updateProxyPort(proxy.port - 1)} aria-label="端口减一">−</button>
                 <input
@@ -923,8 +943,8 @@ function App() {
             <button className="launch-button" onClick={() => void runPrimaryAction()} disabled={busy !== null}>
               <span className="launch-button-icon"><Icon name="play" /></span>
               <span>
-                <small>{busy === 'apply' ? 'APPLYING' : busy === 'launch' ? 'PREPARING' : 'READY'}</small>
-                {appState.codexRunning && themeEnabled ? '即时应用主题' : '启动 CODEX'}
+                <small>{busy === 'apply' ? '应用中' : busy === 'launch' ? '准备中' : '就绪'}</small>
+                {appState.codexRunning && themeEnabled ? '即时应用主题' : '启动 Codex'}
               </span>
               <Icon name="arrow" />
             </button>
@@ -947,7 +967,7 @@ function App() {
           <section className="gallery-section">
             <header className="section-header">
               <div>
-                <span className="section-kicker">{view === 'discover' ? 'CURATED FOR CODEX' : 'READY OFFLINE'}</span>
+                <span className="section-kicker">{view === 'discover' ? 'Codex 精选' : '离线可用'}</span>
                 <h2>{view === 'discover' ? '选择今天的工作氛围' : '已安装主题'}</h2>
               </div>
               <div className="gallery-tools">
@@ -1021,16 +1041,16 @@ function App() {
         <aside className="theme-detail">
           <button className="detail-cover" onClick={() => void cacheSelectedTheme()} disabled={busy !== null}>
             <img src={selectedTheme.coverUrl ?? selectedTheme.previewUrl ?? ''} alt="" onError={hideBrokenImage} />
-            <span className="detail-cover-badge">{selectedTheme.bundled ? 'BUNDLED' : isInstalled(selectedTheme, appState.cachedThemes) ? 'INSTALLED' : 'STORE'}</span>
+            <span className="detail-cover-badge">{selectedTheme.bundled ? '内置' : isInstalled(selectedTheme, appState.cachedThemes) ? '已安装' : '商店'}</span>
             <span className="detail-cover-action"><Icon name="download" />{selectedTheme.bundled ? '离线可用' : '缓存主题'}</span>
           </button>
           <div className="detail-body">
-            <span className="detail-index">SELECTED THEME / {selectedTheme.version}</span>
+            <span className="detail-index">当前主题 / {selectedTheme.version}</span>
             <h3>{themeName(selectedTheme)}</h3>
             <p>{selectedTheme.description?.zh || selectedTheme.description?.en || '由 CodeDrobe 社区提供的 Codex 主题。'}</p>
             <div className="theme-meta">
-              <span>BY <b>{selectedTheme.author?.displayName || selectedTheme.author?.handle || 'COMMUNITY'}</b></span>
-              {!selectedTheme.bundled && <span><b>{selectedTheme.downloadCount}</b> DOWNLOADS</span>}
+              <span>作者 <b>{selectedTheme.author?.displayName || selectedTheme.author?.handle || '社区作者'}</b></span>
+              {!selectedTheme.bundled && <span><b>{selectedTheme.downloadCount}</b> 次下载</span>}
             </div>
             <div className="tag-row">
               <span>{themeAppearance(selectedTheme, appState.themeAppearances) === 'dark' ? '深色基底' : themeAppearance(selectedTheme, appState.themeAppearances) === 'light' ? '浅色基底' : '基底待识别'}</span>
@@ -1052,15 +1072,19 @@ function App() {
                 <div className="download-progress-track"><i style={{ width: `${downloadProgress}%` }} /></div>
               </div>
             )}
-            {selectedThemePublishable && isInstalled(selectedTheme, appState.cachedThemes) && (
+            {showPublisherCard && isInstalled(selectedTheme, appState.cachedThemes) && (
               <section className="publisher-card">
                 <div className="publisher-head">
                   <div>
-                    <span>CREATOR PUBLISH</span>
-                    <strong>发布到 CodeDrobe</strong>
+                    <span>{selectedThemeHasUpdate ? '主题更新' : '创作者发布'}</span>
+                    <strong>{selectedThemeHasUpdate ? '更新 CodeDrobe 主题' : '发布到 CodeDrobe'}</strong>
                   </div>
                 </div>
-                <p>通过官方 CLI 安全连接。Launch Deck 不读取、不保存你的账号凭据。</p>
+                <p>
+                  {selectedThemeHasUpdate
+                    ? `商店版本 ${publishedMarketplaceTheme?.version}，本地版本 ${selectedTheme.version}。更新仍通过官方 CLI 安全提交。`
+                    : '通过官方 CLI 安全连接。启动台不读取、不保存你的账号凭据。'}
+                </p>
                 {publishInfo === null ? (
                   <div className="publish-note">正在检查商店资料…</div>
                 ) : !publishInfo.ready ? (
@@ -1102,17 +1126,19 @@ function App() {
                   <>
                     <div className="publish-actions">
                       <button onClick={() => void publishSelectedTheme(false)} disabled={busy !== null || !publishInfo?.ready}>
-                        {busy === 'publish' ? '处理中…' : '上传草稿'}
+                        {busy === 'publish' ? '处理中…' : selectedThemeHasUpdate ? '上传更新' : '上传草稿'}
                       </button>
                       <button className="review" onClick={() => setConfirmSubmit(true)} disabled={busy !== null || !publishInfo?.ready}>
-                        提交审核
+                        {selectedThemeHasUpdate ? '提交更新审核' : '提交审核'}
                       </button>
                     </div>
                     {confirmSubmit && (
                       <div className="submit-confirm">
-                        <p>提交后将进入 CodeDrobe 审核队列，确认继续吗？</p>
+                        <p>{selectedThemeHasUpdate ? '提交更新后将进入 CodeDrobe 审核队列，确认继续吗？' : '提交后将进入 CodeDrobe 审核队列，确认继续吗？'}</p>
                         <div>
-                          <button onClick={() => void publishSelectedTheme(true)} disabled={busy !== null}>确认提交审核</button>
+                          <button onClick={() => void publishSelectedTheme(true)} disabled={busy !== null}>
+                            {selectedThemeHasUpdate ? '确认提交更新' : '确认提交审核'}
+                          </button>
                           <button onClick={() => setConfirmSubmit(false)} disabled={busy !== null}>取消</button>
                         </div>
                       </div>
@@ -1169,8 +1195,8 @@ function TitleBar() {
       <div className="titlebar-drag-zone">
         <div className="titlebar-brand">
           <img src={launchDeckIcon} alt="" />
-          <strong>Codex Proxy Launch Deck</strong>
-          <i>LOCAL</i>
+          <strong>Codex 代理启动台</strong>
+          <i>本地</i>
         </div>
       </div>
       <div className="window-controls">
@@ -1188,13 +1214,13 @@ function ThemeCard({ theme, index, installed, appearance, selected, onSelect }: 
       <div className="card-art">
         <img src={theme.coverUrl ?? theme.previewUrl ?? ''} alt="" loading="lazy" onError={hideBrokenImage} />
         <span className="card-number">{String(index + 1).padStart(2, '0')}</span>
-        {installed && <span className="installed-pill">LOCAL</span>}
-        <span className={`appearance-pill ${appearance || 'unknown'}`}>{appearance === 'dark' ? 'DARK' : appearance === 'light' ? 'LIGHT' : 'MODE ?'}</span>
+        {installed && <span className="installed-pill">本地</span>}
+        <span className={`appearance-pill ${appearance || 'unknown'}`}>{appearance === 'dark' ? '深色' : appearance === 'light' ? '浅色' : '待识别'}</span>
       </div>
       <div className="card-copy">
         <div>
           <h3>{themeName(theme)}</h3>
-          <p>{theme.author?.displayName || theme.author?.handle || 'CodeDrobe Community'}</p>
+          <p>{theme.author?.displayName || theme.author?.handle || 'CodeDrobe 社区'}</p>
         </div>
         <span className="card-arrow"><Icon name="arrow" /></span>
       </div>
@@ -1203,7 +1229,7 @@ function ThemeCard({ theme, index, installed, appearance, selected, onSelect }: 
 }
 
 function StatusRow({ label, ok, running = false }: { label: string; ok: boolean; running?: boolean }) {
-  return <div className="system-row"><span>{label}</span><i className={ok ? (running ? 'running' : 'ok') : ''}>{ok ? (running ? 'RUNNING' : 'READY') : 'CHECK'}</i></div>
+  return <div className="system-row"><span>{label}</span><i className={ok ? (running ? 'running' : 'ok') : ''}>{ok ? (running ? '运行中' : '就绪') : '检查'}</i></div>
 }
 
 function AiCreatePanel({ capability, prompt, appearance, visualMode, imagePath, job, installing, onPromptChange, onAppearanceChange, onVisualModeChange, onChooseImage, onInstall, onGenerate, onOpenInstalled }: {
@@ -1228,13 +1254,13 @@ function AiCreatePanel({ capability, prompt, appearance, visualMode, imagePath, 
     <section className="ai-create-panel">
       <header className="ai-create-header">
         <div>
-          <span className="section-kicker">CREATE WITH LOCAL CODEX</span>
+          <span className="section-kicker">使用本机 Codex 创作</span>
           <h2>用一句描述，创作你的 Codex 主题</h2>
           <p>直接调用你已登录的本机 Codex，不需要配置 API Key。生成过程运行在独立沙箱中，完成后自动校验并加入主题库。</p>
         </div>
         <div className="ai-capability-card">
           <StatusRow label="Codex CLI" ok={capability.codexCliAvailable} />
-          <StatusRow label="主题创作 Skill" ok={capability.skillInstalled} />
+          <StatusRow label="主题创作技能" ok={capability.skillInstalled} />
           {!capability.skillInstalled && (
             <button onClick={onInstall} disabled={installing || !capability.codexCliAvailable}>
               <Icon name="download" />{installing ? '正在安装…' : '一键安装主题能力'}
@@ -1286,17 +1312,17 @@ function AiCreatePanel({ capability, prompt, appearance, visualMode, imagePath, 
               <Icon name="spark" />{running ? 'Codex 正在创作…' : '开始 AI 创作'}
             </button>
           </div>
-          {!ready && <p className="ai-hint">首次使用需要 Codex CLI 和 CodeDrobe 主题创作 Skill 均为 READY。</p>}
+          {!ready && <p className="ai-hint">首次使用需要 Codex CLI 和 CodeDrobe 主题创作技能均已就绪。</p>}
           {ready && <p className="ai-hint">生成包会锁定为{appearance === 'dark' ? '深色' : '浅色'}基底；应用时 CodeDrobe 会同步切换 Codex 原生外观。</p>}
         </div>
 
         <div className={`ai-job-card ${job?.status || 'idle'}`}>
           <div className="ai-job-head">
             <div>
-              <span>GENERATION STATUS</span>
+              <span>生成状态</span>
               <h3>{job?.phase || '等待创作任务'}</h3>
             </div>
-            <b>{job ? `${job.progress}%` : 'IDLE'}</b>
+            <b>{job ? `${job.progress}%` : '待开始'}</b>
           </div>
           <div className="ai-progress-track"><i style={{ width: `${job?.progress || 0}%` }} /></div>
           <div className="ai-log" aria-live="polite">
@@ -1312,7 +1338,7 @@ function AiCreatePanel({ capability, prompt, appearance, visualMode, imagePath, 
           {job?.status === 'failed' && <p className="ai-error">{job.error}</p>}
         </div>
       </div>
-      <p className="ai-safety-note">生成会使用你的 Codex 账户额度。Launch Deck 不会读取或保存 Codex 凭据，也不会在生成期间重启正在运行的 Codex。</p>
+      <p className="ai-safety-note">生成会使用你的 Codex 账户额度。启动台不会读取或保存 Codex 凭据，也不会在生成期间重启正在运行的 Codex。</p>
     </section>
   )
 }
@@ -1342,7 +1368,7 @@ function SettingsPanel({ appState, appUpdate, busy, onRestore, onOpenStore, onCh
   return (
     <section className="settings-panel">
       <header>
-        <span className="section-kicker">SYSTEM & RECOVERY</span>
+        <span className="section-kicker">系统与恢复</span>
         <h2>启动设置</h2>
         <p>启动台只为本次 Codex 进程设置代理环境变量，不会修改 Windows 全局代理。</p>
       </header>
@@ -1350,7 +1376,7 @@ function SettingsPanel({ appState, appUpdate, busy, onRestore, onOpenStore, onCh
         <article>
           <span className="setting-number">01</span>
           <h3>主题缓存</h3>
-          <p>线上主题通过 CodeDrobe Core 下载并完成 SHA-256 校验。</p>
+          <p>线上主题通过 CodeDrobe 核心下载并完成 SHA-256 校验。</p>
           <code>{appState.cacheDirectory || '正在定位缓存目录…'}</code>
         </article>
         <article>
@@ -1362,8 +1388,8 @@ function SettingsPanel({ appState, appUpdate, busy, onRestore, onOpenStore, onCh
         <article>
           <span className="setting-number">03</span>
           <h3>CodeDrobe 创作者连接</h3>
-          <p>Launch Deck 已支持通过官方 CLI 登录和发布内置或本地创作主题；完整商店与跨应用管理仍可使用 CodeDrobe Desktop。</p>
-          <button className="secondary" onClick={onOpenStore}>下载 CodeDrobe Desktop</button>
+          <p>启动台已支持通过官方 CLI 登录和发布内置或本地创作主题；完整商店与跨应用管理仍可使用 CodeDrobe 桌面端。</p>
+          <button className="secondary" onClick={onOpenStore}>下载 CodeDrobe 桌面端</button>
         </article>
         <article className="update-setting">
           <span className="setting-number">04</span>
@@ -1408,6 +1434,29 @@ function isInstalled(theme: Theme, cachedThemes: string[]) {
 
 function themeAppearance(theme: Theme, appearances: AppState['themeAppearances']) {
   return theme.appearanceMode || appearances[`${theme.slug}@${theme.version}`]
+}
+
+function compareThemeVersions(left: string, right: string) {
+  const parseVersion = (version: string) => {
+    const [core, ...prereleaseParts] = version.trim().replace(/^v/i, '').split('-')
+    return {
+      core: core.split('.').map((part) => Number.parseInt(part, 10) || 0),
+      prerelease: prereleaseParts.join('-').split('.').filter(Boolean),
+    }
+  }
+  const leftVersion = parseVersion(left)
+  const rightVersion = parseVersion(right)
+  const coreLength = Math.max(leftVersion.core.length, rightVersion.core.length)
+  for (let index = 0; index < coreLength; index += 1) {
+    const difference = (leftVersion.core[index] || 0) - (rightVersion.core[index] || 0)
+    if (difference !== 0) return difference
+  }
+  if (leftVersion.prerelease.length === 0 && rightVersion.prerelease.length > 0) return 1
+  if (rightVersion.prerelease.length === 0 && leftVersion.prerelease.length > 0) return -1
+  return leftVersion.prerelease.join('.').localeCompare(rightVersion.prerelease.join('.'), undefined, {
+    numeric: true,
+    sensitivity: 'base',
+  })
 }
 
 function mergeThemes(generatedThemes: Theme[], marketplaceThemes: Theme[]) {

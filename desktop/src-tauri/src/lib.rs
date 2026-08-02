@@ -51,8 +51,8 @@ const BUNDLED_THEMES: &[(&str, &str, &str)] = &[
         "tiga-starlight-awakening-1.1.3.codedrobe-theme",
     ),
 ];
-const COMPAT_CORE_FILE: &str = "codedrobe-core-0.7.0-beta.0-launchdeck.2.tgz";
-const COMPAT_CORE_SHA256: &str = "1197e73b068f00c990d5d60b3c4245b2e6b114b2dc7835280b69662759276e1d";
+const COMPAT_CORE_FILE: &str = "codedrobe-core-0.7.0-beta.0-launchdeck.6.tgz";
+const COMPAT_CORE_SHA256: &str = "2fc89b3e1407415f63c5bce9f4c32bdf0b3813c31b8346cd01ef934c2ec00652";
 const AI_THEME_COMPONENT_COVERAGE_REFERENCE: &str = r#"
 
 /* Launch Deck coverage contract for Codex 26.721+.
@@ -463,7 +463,7 @@ async fn install_ai_theme_skill() -> Result<AiThemeCapability, String> {
                 "--yes",
             ])
             .output()
-            .map_err(|error| format!("无法启动 Skill 安装器：{error}"))?;
+            .map_err(|error| format!("无法启动主题创作技能安装器：{error}"))?;
         if !output.status.success() {
             return Err(format!(
                 "主题能力安装失败：{}",
@@ -472,7 +472,7 @@ async fn install_ai_theme_skill() -> Result<AiThemeCapability, String> {
         }
         let capability = ai_theme_capability();
         if !capability.skill_installed {
-            return Err("安装命令已结束，但没有找到 codedrobe-theme Skill。".to_string());
+            return Err("安装命令已结束，但没有找到 CodeDrobe 主题创作技能。".to_string());
         }
         Ok(capability)
     })
@@ -1334,7 +1334,7 @@ fn generated_theme_package_path(theme: &ThemeSelection) -> Result<PathBuf, Strin
     let record = load_generated_theme_records()?
         .into_iter()
         .find(|record| record.slug == theme.slug && record.version == theme.version)
-        .ok_or_else(|| "只能发布由 Launch Deck 本地 AI 创作的主题。".to_string())?;
+        .ok_or_else(|| "只能发布由启动台本地 AI 创作的主题。".to_string())?;
     let file_name = Path::new(&record.file_name);
     if file_name.file_name() != Some(file_name.as_os_str()) {
         return Err("AI 主题索引包含不安全的文件路径。".to_string());
@@ -1717,7 +1717,7 @@ fn run_ai_theme_job_inner(
         job.phase = "打包并校验主题".to_string();
         job.progress = 84;
         job.logs
-            .push("主题源码已生成，Launch Deck 正在统一打包…".to_string());
+            .push("主题源码已生成，启动台正在统一打包…".to_string());
     });
     let manifest_text = manifest_path.to_string_lossy().into_owned();
     let output_text = output_path.to_string_lossy().into_owned();
@@ -1761,15 +1761,15 @@ fn run_ai_theme_job_inner(
 
 fn stage_ai_authoring_reference(work_dir: &Path) -> Result<PathBuf, String> {
     let skill =
-        ai_theme_skill_path().ok_or_else(|| "未找到 CodeDrobe 主题创作 Skill。".to_string())?;
+        ai_theme_skill_path().ok_or_else(|| "未找到 CodeDrobe 主题创作技能。".to_string())?;
     let source = skill
         .parent()
-        .ok_or_else(|| "CodeDrobe Skill 路径无效。".to_string())?
+        .ok_or_else(|| "CodeDrobe 主题创作技能路径无效。".to_string())?
         .join("assets")
         .join("theme-starter")
         .join("codex.css");
     if !source.is_file() {
-        return Err("CodeDrobe Skill 缺少 Codex 主题模板，请重新安装主题创作能力。".to_string());
+        return Err("CodeDrobe 主题创作技能缺少 Codex 主题模板，请重新安装主题创作能力。".to_string());
     }
     let reference_dir = work_dir.join("authoring-reference");
     fs::create_dir_all(&reference_dir).map_err(|error| format!("无法创建主题模板目录：{error}"))?;
@@ -3223,11 +3223,11 @@ fn show_main_window(app: &AppHandle) {
 fn setup_tray(app: &mut tauri::App) -> tauri::Result<()> {
     let open_item = MenuItem::with_id(app, "open", "打开启动台", true, None::<&str>)?;
     let update_item = MenuItem::with_id(app, "update", "检查更新", true, None::<&str>)?;
-    let quit_item = MenuItem::with_id(app, "quit", "退出 Launch Deck", true, None::<&str>)?;
+    let quit_item = MenuItem::with_id(app, "quit", "退出启动台", true, None::<&str>)?;
     let menu = Menu::with_items(app, &[&open_item, &update_item, &quit_item])?;
 
     let mut tray = TrayIconBuilder::new()
-        .tooltip("Codex Proxy Launch Deck")
+        .tooltip("Codex 代理启动台")
         .menu(&menu)
         .show_menu_on_left_click(false)
         .on_menu_event(|app, event| match event.id.as_ref() {
@@ -3333,7 +3333,7 @@ pub fn run() {
                 let _ = app_handle
                     .notification()
                     .builder()
-                    .title("Launch Deck 仍在后台运行")
+                    .title("启动台仍在后台运行")
                     .body("主题守护与更新检查会继续运行，可从系统托盘重新打开。")
                     .show();
             }
