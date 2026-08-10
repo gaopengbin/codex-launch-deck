@@ -10,6 +10,7 @@ import { check, type Update } from '@tauri-apps/plugin-updater'
 import mikuHero from './assets/miku-hero.png'
 import kuugaHero from './assets/kuuga-hero.png'
 import tigaHero from './assets/tiga-hero.webp'
+import yujieHero from './assets/yujie-hero.webp'
 import launchDeckIcon from './assets/launch-deck-icon.png'
 import './App.css'
 
@@ -182,6 +183,28 @@ const bundledThemes: Theme[] = [{
   categories: [{ slug: 'character', name: { zh: '角色主题', en: 'Character' }, primary: true }],
   previewUrl: tigaHero,
   coverUrl: tigaHero,
+  publishedAt: '',
+  supportedApps: ['codex'],
+  author: { handle: 'local', displayName: '启动台' },
+  likeCount: 0,
+  downloadCount: 0,
+  bundled: true,
+  appearanceMode: 'dark',
+}, {
+  id: 'bundled-yujie',
+  slug: 'yujie-berry-nocturne',
+  name: {
+    zh: '雨姐 · 绯莓夜曲',
+    en: 'Yujie · Berry Nocturne',
+  },
+  version: '1.0.0',
+  description: {
+    zh: '以深莓暗影、玫瑰金微光、丝带与雨姐暖意肖像构成的精致暗色工作台。',
+    en: 'A refined dark workspace shaped by deep berry shadows, rose-gold light, silk ribbons, and Yujie\'s warm portrait.',
+  },
+  categories: [{ slug: 'character', name: { zh: '角色主题', en: 'Character' }, primary: true }],
+  previewUrl: yujieHero,
+  coverUrl: yujieHero,
   publishedAt: '',
   supportedApps: ['codex'],
   author: { handle: 'local', displayName: '启动台' },

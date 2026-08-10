@@ -1,0 +1,72 @@
+{
+  "schemaVersion": 1,
+  "id": "yujie-berry-nocturne",
+  "displayName": "雨姐 · 绯莓夜曲",
+  "version": "1.0.0",
+  "catalog": {
+    "name": {
+      "en": "Yujie · Berry Nocturne",
+      "zh": "雨姐 · 绯莓夜曲"
+    },
+    "description": {
+      "en": "A refined dark workspace shaped by deep berry shadows, rose-gold light, silk ribbons, and Yujie's warm portrait.",
+      "zh": "以深莓暗影、玫瑰金微光、丝带与雨姐暖意肖像构成的精致暗色工作台。"
+    },
+    "categories": ["character", "artistic"]
+  },
+  "images": {
+    "hero": "assets/hero.webp",
+    "sidebar": "assets/sidebar.webp"
+  },
+  "copy": {
+    "brandTitle": "雨姐 · 绯莓夜曲",
+    "brandSubtitle": "BERRY · SILK · ROSE GOLD",
+    "signature": "Warm ideas, quietly built.",
+    "tagline": "把温柔留给灵感，把专注交给每一次构建。",
+    "projectPrefix": "绯莓工坊 · ",
+    "projectLabel": "选择今天要认真完成的项目",
+    "ribbon": "绯"
+  },
+  "targets": {
+    "codex": {
+      "css": "codex.css",
+      "options": {
+        "rendererProfile": "codex-theme-v1",
+        "baseTheme": {
+          "mode": "dark",
+          "accent": "#E58A9D",
+          "ink": "#F8ECEC",
+          "surface": "#130A0F"
+        }
+      },
+      "verification": {
+        "contexts": [
+          {
+            "name": "home",
+            "when": {
+              "any": ["[data-feature='game-source']", ".group\\/home-suggestions", ".group\\/project-selector"]
+            },
+            "recommended": [
+              {
+                "name": "home-composer",
+                "any": [".composer-surface-chrome"]
+              }
+            ]
+          },
+          {
+            "name": "conversation",
+            "when": {
+              "any": ["#root main:not(:has([data-feature='game-source'], .group\\/home-suggestions, .group\\/project-selector))"]
+            },
+            "recommended": [
+              {
+                "name": "conversation-composer",
+                "any": [".composer-surface-chrome"]
+              }
+            ]
+          }
+        ]
+      }
+    }
+  }
+}

@@ -50,9 +50,14 @@ const BUNDLED_THEMES: &[(&str, &str, &str)] = &[
         "1.1.3",
         "tiga-starlight-awakening-1.1.3.codedrobe-theme",
     ),
+    (
+        "yujie-berry-nocturne",
+        "1.0.0",
+        "yujie-berry-nocturne-1.0.0.codedrobe-theme",
+    ),
 ];
-const COMPAT_CORE_FILE: &str = "codedrobe-core-0.7.0-beta.0-launchdeck.6.tgz";
-const COMPAT_CORE_SHA256: &str = "2fc89b3e1407415f63c5bce9f4c32bdf0b3813c31b8346cd01ef934c2ec00652";
+const COMPAT_CORE_FILE: &str = "codedrobe-core-0.7.0-beta.0-launchdeck.9.tgz";
+const COMPAT_CORE_SHA256: &str = "21cbdfa5f2495f088d248142cac1756e071bc0345c62ae57b25975a85fa508fb";
 const AI_THEME_COMPONENT_COVERAGE_REFERENCE: &str = r#"
 
 /* Launch Deck coverage contract for Codex 26.721+.
@@ -1340,9 +1345,11 @@ fn generated_theme_package_path(theme: &ThemeSelection) -> Result<PathBuf, Strin
         return Err("AI 主题索引包含不安全的文件路径。".to_string());
     }
     let path = theme_cache_directory()?.join(file_name);
-    path.is_file()
-        .then_some(path)
-        .ok_or_else(|| "AI 主题包已不在本地缓存中，请重新生成或导入。".to_string())
+    if !path.is_file() {
+        return Err("AI 主题包已不在本地缓存中，请重新生成或导入。".to_string());
+    }
+    ensure_generated_theme_publish_catalog(&path, &record)?;
+    Ok(path)
 }
 
 fn publishable_theme_package_path(
@@ -1366,6 +1373,138 @@ fn localized_catalog_value_present(value: Option<&serde_json::Value>) -> bool {
     }
 }
 
+fn generated_theme_categories(record: &GeneratedThemeRecord) -> Vec<serde_json::Value> {
+    let description =
+        format!("{} {} {}", record.slug, record.display_name, record.tagline).to_lowercase();
+    let mut categories = vec!["artistic"];
+    let candidates = [
+        (
+            "futuristic",
+            ["future", "futuristic", "neon", "霓虹", "未来"].as_slice(),
+        ),
+        ("guofeng", ["guofeng", "hanfu", "古风", "汉服"].as_slice()),
+        (
+            "character",
+            ["character", "portrait", "人物", "角色", "人像"].as_slice(),
+        ),
+        ("retro", ["retro", "复古", "怀旧"].as_slice()),
+        ("nature", ["nature", "forest", "自然", "森林"].as_slice()),
+        ("minimal", ["minimal", "极简", "简约"].as_slice()),
+        (
+            "professional",
+            ["professional", "business", "专业", "商务"].as_slice(),
+        ),
+        (
+            "festive",
+            ["festive", "festival", "节日", "庆典"].as_slice(),
+        ),
+    ];
+    for (category, keywords) in candidates {
+        if keywords.iter().any(|keyword| description.contains(keyword)) {
+            categories.push(category);
+        }
+        if categories.len() == 5 {
+            break;
+        }
+    }
+    categories
+        .into_iter()
+        .map(|category| serde_json::Value::String(category.to_string()))
+        .collect()
+}
+
+fn ensure_localized_catalog_field(
+    catalog: &mut serde_json::Map<String, serde_json::Value>,
+    field: &str,
+    fallback: &str,
+) -> bool {
+    let fallback = fallback.trim();
+    let fallback = if fallback.is_empty() {
+        "Local CodeDrobe theme"
+    } else {
+        fallback
+    };
+    let current = catalog.get(field).cloned();
+    let mut localized = match current.as_ref() {
+        Some(serde_json::Value::Object(values)) => values.clone(),
+        Some(serde_json::Value::String(value)) if !value.trim().is_empty() => {
+            let mut values = serde_json::Map::new();
+            values.insert("en".to_string(), serde_json::Value::String(value.clone()));
+            values.insert("zh".to_string(), serde_json::Value::String(value.clone()));
+            values
+        }
+        _ => serde_json::Map::new(),
+    };
+    for locale in ["en", "zh"] {
+        let missing = localized
+            .get(locale)
+            .and_then(serde_json::Value::as_str)
+            .is_none_or(|value| value.trim().is_empty());
+        if missing {
+            localized.insert(
+                locale.to_string(),
+                serde_json::Value::String(fallback.to_string()),
+            );
+        }
+    }
+    let next = serde_json::Value::Object(localized);
+    if current.as_ref() == Some(&next) {
+        return false;
+    }
+    catalog.insert(field.to_string(), next);
+    true
+}
+
+fn ensure_generated_theme_publish_catalog(
+    path: &Path,
+    record: &GeneratedThemeRecord,
+) -> Result<bool, String> {
+    let bytes = fs::read(path).map_err(|error| format!("无法读取本地主题包：{error}"))?;
+    let mut package: serde_json::Value = serde_json::from_slice(&bytes)
+        .map_err(|error| format!("本地主题包不是有效 JSON：{error}"))?;
+    let theme = package
+        .get_mut("theme")
+        .and_then(serde_json::Value::as_object_mut)
+        .ok_or_else(|| "本地主题包缺少 theme 元数据。".to_string())?;
+    if !theme
+        .get("catalog")
+        .is_some_and(serde_json::Value::is_object)
+    {
+        theme.insert(
+            "catalog".to_string(),
+            serde_json::Value::Object(serde_json::Map::new()),
+        );
+    }
+    let catalog = theme
+        .get_mut("catalog")
+        .and_then(serde_json::Value::as_object_mut)
+        .expect("catalog was normalized to an object");
+    let mut changed = ensure_localized_catalog_field(catalog, "name", &record.display_name);
+    let description = if record.tagline.trim().is_empty() {
+        format!("{} CodeDrobe theme", record.display_name)
+    } else {
+        record.tagline.clone()
+    };
+    changed |= ensure_localized_catalog_field(catalog, "description", &description);
+    let categories_missing = catalog
+        .get("categories")
+        .and_then(serde_json::Value::as_array)
+        .is_none_or(Vec::is_empty);
+    if categories_missing {
+        catalog.insert(
+            "categories".to_string(),
+            serde_json::Value::Array(generated_theme_categories(record)),
+        );
+        changed = true;
+    }
+    if changed {
+        let bytes = serde_json::to_vec(&package)
+            .map_err(|error| format!("无法更新本地主题商店资料：{error}"))?;
+        fs::write(path, bytes).map_err(|error| format!("无法保存本地主题商店资料：{error}"))?;
+    }
+    Ok(changed)
+}
+
 fn theme_publish_info_value(package: &serde_json::Value) -> ThemePublishInfo {
     const STORE_CATEGORIES: [&str; 10] = [
         "professional",
@@ -1382,10 +1521,10 @@ fn theme_publish_info_value(package: &serde_json::Value) -> ThemePublishInfo {
     let catalog = package.get("theme").and_then(|value| value.get("catalog"));
     let mut missing = Vec::new();
     if !localized_catalog_value_present(catalog.and_then(|value| value.get("name"))) {
-        missing.push("商店名称（theme.catalog.name）".to_string());
+        missing.push("商店名称".to_string());
     }
     if !localized_catalog_value_present(catalog.and_then(|value| value.get("description"))) {
-        missing.push("商店简介（theme.catalog.description）".to_string());
+        missing.push("商店简介".to_string());
     }
     let categories = catalog
         .and_then(|value| value.get("categories"))
@@ -1399,7 +1538,7 @@ fn theme_publish_info_value(package: &serde_json::Value) -> ThemePublishInfo {
         })
         .unwrap_or_default();
     if categories.is_empty() {
-        missing.push("至少一个商店分类（theme.catalog.categories）".to_string());
+        missing.push("至少一个商店分类".to_string());
     } else if categories.len() > 5
         || categories
             .iter()
@@ -1769,7 +1908,9 @@ fn stage_ai_authoring_reference(work_dir: &Path) -> Result<PathBuf, String> {
         .join("theme-starter")
         .join("codex.css");
     if !source.is_file() {
-        return Err("CodeDrobe 主题创作技能缺少 Codex 主题模板，请重新安装主题创作能力。".to_string());
+        return Err(
+            "CodeDrobe 主题创作技能缺少 Codex 主题模板，请重新安装主题创作能力。".to_string(),
+        );
     }
     let reference_dir = work_dir.join("authoring-reference");
     fs::create_dir_all(&reference_dir).map_err(|error| format!("无法创建主题模板目录：{error}"))?;
@@ -3929,6 +4070,55 @@ mod tests {
         assert!(ready.ready);
         assert_eq!(ready.categories, ["artistic", "futuristic"]);
         assert!(ready.has_cover);
+    }
+
+    #[test]
+    fn repairs_publish_catalog_for_legacy_generated_themes() {
+        let directory =
+            std::env::temp_dir().join(format!("launch-deck-catalog-repair-{}", std::process::id()));
+        fs::create_dir_all(&directory).expect("test directory should be created");
+        let path = directory.join("violet-nocturne-codex-1.0.0.codedrobe-theme");
+        fs::write(
+            &path,
+            serde_json::to_vec(&serde_json::json!({
+                "theme": {
+                    "id": "violet-nocturne-codex",
+                    "displayName": "Violet Nocturne",
+                    "version": "1.0.0"
+                },
+                "assets": { "images": { "hero": { "base64": "image" } } }
+            }))
+            .expect("legacy package should serialize"),
+        )
+        .expect("legacy package should be written");
+        let record = GeneratedThemeRecord {
+            id: "generated-violet-nocturne-codex".to_string(),
+            slug: "violet-nocturne-codex".to_string(),
+            display_name: "Violet Nocturne".to_string(),
+            version: "1.0.0".to_string(),
+            tagline: "A low-key violet neon workspace.".to_string(),
+            file_name: path
+                .file_name()
+                .expect("package should have a file name")
+                .to_string_lossy()
+                .into_owned(),
+            appearance_mode: "dark".to_string(),
+            cover_data_url: String::new(),
+        };
+
+        assert!(ensure_generated_theme_publish_catalog(&path, &record)
+            .expect("legacy package should be repaired"));
+        assert!(!ensure_generated_theme_publish_catalog(&path, &record)
+            .expect("catalog repair should be idempotent"));
+        let info =
+            inspect_theme_publish_info(&path).expect("repaired package should be inspectable");
+        assert!(
+            info.ready,
+            "repaired package is missing: {:?}",
+            info.missing
+        );
+        assert_eq!(info.categories, ["artistic", "futuristic"]);
+        let _ = fs::remove_dir_all(directory);
     }
 
     #[test]

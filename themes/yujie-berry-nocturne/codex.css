@@ -1,0 +1,422 @@
+:root.codedrobe-host-codex {
+  color-scheme: dark !important;
+  --yujie-bg: #12090e;
+  --yujie-surface: rgba(25, 12, 19, 0.9);
+  --yujie-surface-soft: rgba(44, 20, 30, 0.78);
+  --yujie-surface-strong: rgba(17, 8, 13, 0.97);
+  --yujie-sidebar: rgba(17, 8, 13, 0.96);
+  --yujie-text: #f8ecec;
+  --yujie-muted: #c9aeb4;
+  --yujie-faint: #927982;
+  --yujie-rose: #e58a9d;
+  --yujie-rose-bright: #ffc0cb;
+  --yujie-rose-soft: rgba(229, 138, 157, 0.18);
+  --yujie-gold: #d8b47f;
+  --yujie-gold-soft: rgba(216, 180, 127, 0.14);
+  --yujie-border: rgba(232, 174, 186, 0.22);
+  --yujie-border-strong: rgba(244, 169, 186, 0.44);
+  --yujie-shadow: rgba(3, 0, 2, 0.66);
+  --theme-bg: var(--yujie-bg);
+  --theme-surface: var(--yujie-surface);
+  --theme-surface-soft: var(--yujie-surface-soft);
+  --theme-surface-strong: var(--yujie-surface-strong);
+  --theme-sidebar: var(--yujie-sidebar);
+  --theme-text: var(--yujie-text);
+  --theme-muted: var(--yujie-muted);
+  --theme-accent: var(--yujie-rose);
+  --theme-accent-soft: var(--yujie-rose-soft);
+  --theme-border: var(--yujie-border);
+  --theme-shadow: var(--yujie-shadow);
+  --color-token-bg-primary: var(--yujie-bg) !important;
+  --color-token-bg-secondary: var(--yujie-surface) !important;
+  --color-token-bg-tertiary: var(--yujie-surface-soft) !important;
+  --color-token-main-surface-primary: var(--yujie-surface) !important;
+  --color-token-side-bar-background: var(--yujie-sidebar) !important;
+  --color-token-foreground: var(--yujie-text) !important;
+  --color-token-text-primary: var(--yujie-text) !important;
+  --color-token-text-secondary: var(--yujie-muted) !important;
+  --color-token-text-tertiary: var(--yujie-faint) !important;
+  --color-token-description-foreground: var(--yujie-muted) !important;
+  --color-token-icon-foreground: var(--yujie-text) !important;
+  --color-token-border: var(--yujie-border) !important;
+  --color-token-border-default: var(--yujie-border) !important;
+  --color-token-border-heavy: rgba(232, 174, 186, 0.36) !important;
+  --color-token-input-background: var(--yujie-surface-strong) !important;
+  --color-token-input-border: var(--yujie-border-strong) !important;
+  --color-token-list-hover-background: var(--yujie-rose-soft) !important;
+  --color-token-list-active-selection-background: rgba(180, 73, 98, 0.3) !important;
+  --color-token-toolbar-hover-background: var(--yujie-rose-soft) !important;
+  --color-token-link: #f3a9ba !important;
+  --color-token-primary: var(--yujie-rose-bright) !important;
+  --color-token-focus-border: rgba(255, 192, 203, 0.78) !important;
+  --color-token-dropdown-background: rgba(24, 11, 17, 0.98) !important;
+  --color-token-dropdown-foreground: var(--yujie-text) !important;
+  --color-token-menu-background: rgba(24, 11, 17, 0.98) !important;
+  --color-token-menu-border: var(--yujie-border) !important;
+  --color-token-conversation-summary-leading: var(--yujie-muted) !important;
+  --color-token-conversation-summary-trailing: var(--yujie-muted) !important;
+}
+
+html.codedrobe-host-codex body {
+  background:
+    radial-gradient(circle at 84% 24%, rgba(183, 71, 96, 0.17), transparent 30%),
+    linear-gradient(145deg, #090408 0%, #150a11 50%, #251019 100%) !important;
+  color: var(--yujie-text) !important;
+  font-family: "Segoe UI Variable", "Microsoft YaHei UI", sans-serif !important;
+}
+
+#codedrobe-codex-skin-chrome {
+  position: fixed;
+  z-index: 31;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+#codedrobe-codex-skin-chrome :is(.dream-brand, .dream-signature, .dream-polaroid, .dream-ribbon) {
+  display: none !important;
+}
+
+html.codedrobe-host-codex aside.app-shell-left-panel {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  background: linear-gradient(180deg, rgba(23, 10, 16, 0.92), rgba(10, 5, 8, 0.99)) !important;
+  border-right: 1px solid var(--yujie-border) !important;
+  box-shadow: 12px 0 40px rgba(0, 0, 0, 0.34) !important;
+  color: var(--yujie-text) !important;
+  backdrop-filter: blur(20px) saturate(1.06);
+}
+
+html.codedrobe-host-codex aside.app-shell-left-panel::before {
+  position: absolute;
+  z-index: 0;
+  inset: 36px 0 0;
+  content: "";
+  pointer-events: none;
+  background:
+    linear-gradient(180deg, rgba(12, 5, 9, 0.26), rgba(12, 5, 9, 0.4) 52%, rgba(8, 4, 6, 0.95) 93%),
+    var(--codedrobe-image-sidebar) center / cover no-repeat;
+  opacity: 0.48;
+  filter: saturate(0.82) contrast(1.05);
+  -webkit-mask-image: linear-gradient(180deg, transparent 0, #000 8%, #000 82%, transparent 100%);
+  mask-image: linear-gradient(180deg, transparent 0, #000 8%, #000 82%, transparent 100%);
+}
+
+html.codedrobe-host-codex aside.app-shell-left-panel::after {
+  position: absolute;
+  z-index: 2;
+  top: 70px;
+  right: -1px;
+  bottom: 28px;
+  width: 1px;
+  content: "";
+  pointer-events: none;
+  background: linear-gradient(transparent, var(--yujie-gold), var(--yujie-rose-bright), transparent);
+  opacity: 0.62;
+}
+
+html.codedrobe-host-codex aside.app-shell-left-panel :is(a, button, [role="button"]) {
+  border-radius: 9px !important;
+  color: var(--yujie-text) !important;
+  transition: background-color 160ms ease, color 160ms ease, box-shadow 160ms ease !important;
+}
+
+html.codedrobe-host-codex aside.app-shell-left-panel :is(a, button, [role="button"]):hover {
+  background: linear-gradient(90deg, rgba(229, 138, 157, 0.2), rgba(216, 180, 127, 0.06)) !important;
+  color: #fff8f8 !important;
+}
+
+html.codedrobe-host-codex aside.app-shell-left-panel :is([aria-current="page"], [aria-selected="true"], .sidebar-item.bg-token-list-active-selection-background) {
+  background: linear-gradient(90deg, rgba(180, 73, 98, 0.36), rgba(62, 27, 40, 0.46)) !important;
+  box-shadow: inset 3px 0 0 var(--yujie-rose-bright), inset 0 0 0 1px rgba(232, 174, 186, 0.15) !important;
+}
+
+html.codedrobe-host-codex :is(main.main-surface, #root main) {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  border-color: var(--yujie-border) !important;
+  background-color: var(--yujie-bg) !important;
+  background-image:
+    linear-gradient(90deg, rgba(12, 6, 10, 0.99) 0%, rgba(18, 8, 13, 0.96) 42%, rgba(25, 10, 16, 0.74) 72%, rgba(30, 12, 18, 0.48) 100%),
+    linear-gradient(180deg, rgba(0, 0, 0, 0.06), rgba(10, 4, 7, 0.62)) !important;
+  background-repeat: no-repeat !important;
+  background-position: center !important;
+  background-size: 100% 100% !important;
+  box-shadow: inset 24px 0 70px rgba(0, 0, 0, 0.18) !important;
+}
+
+html.codedrobe-host-codex :is(main.main-surface, #root main)::before {
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  content: "";
+  pointer-events: none;
+  background-image:
+    linear-gradient(90deg, rgba(11, 5, 9, 0.88) 0%, rgba(15, 7, 11, 0.66) 45%, rgba(18, 8, 12, 0.18) 72%, rgba(16, 7, 11, 0.08) 100%),
+    linear-gradient(180deg, rgba(0, 0, 0, 0.02), rgba(10, 4, 7, 0.42)),
+    var(--codedrobe-image-hero);
+  background-repeat: no-repeat;
+  background-position: center, center, right center;
+  background-size: 100% 100%, 100% 100%, cover;
+  opacity: 0.44;
+  filter: saturate(0.9) contrast(1.04);
+}
+
+html.codedrobe-host-codex :is(main.main-surface, #root main)::after {
+  position: absolute;
+  z-index: -1;
+  inset: 46px 0 0;
+  content: "";
+  pointer-events: none;
+  background:
+    radial-gradient(circle at calc(100% - 46px) 46px, rgba(255, 192, 203, 0.4) 0 2px, rgba(216, 180, 127, 0.18) 3px 8px, transparent 9px),
+    linear-gradient(90deg, rgba(232, 174, 186, 0.26), transparent 18%) left 24px top 22px / 240px 1px no-repeat,
+    linear-gradient(180deg, rgba(232, 174, 186, 0.2), transparent 24%) left 24px top 22px / 1px 190px no-repeat,
+    radial-gradient(circle, rgba(255, 192, 203, 0.12) 0 1px, transparent 1.5px) 0 0 / 52px 52px;
+  opacity: 0.72;
+}
+
+html.codedrobe-host-codex :is(main.main-surface, #root main) > header,
+html.codedrobe-host-codex header.app-header-tint {
+  background: rgba(16, 7, 12, 0.82) !important;
+  border-bottom: 1px solid var(--yujie-border) !important;
+  color: var(--yujie-text) !important;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.16) !important;
+  backdrop-filter: blur(22px) saturate(1.1);
+}
+
+html.codedrobe-host-codex main.main-surface > header.app-header-tint > [data-testid="app-shell-header-context-menu-surface"]::before {
+  position: absolute;
+  z-index: 2;
+  top: 7px;
+  left: 50%;
+  height: 30px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 18px;
+  border: 1px solid rgba(232, 174, 186, 0.32);
+  border-radius: 999px;
+  content: "YUJIE · BERRY NOCTURNE";
+  pointer-events: none;
+  color: #ffe9ed;
+  background: linear-gradient(135deg, rgba(20, 8, 14, 0.96), rgba(105, 39, 57, 0.88), rgba(22, 9, 15, 0.97));
+  box-shadow: 0 7px 22px rgba(0, 0, 0, 0.34), inset 0 0 0 1px rgba(255, 192, 203, 0.12), 0 0 22px rgba(229, 138, 157, 0.1);
+  font: 700 10px/1 "Segoe UI Variable", "Microsoft YaHei UI", sans-serif;
+  letter-spacing: 0.14em;
+  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.7);
+  transform: translateX(-50%);
+}
+
+html.codedrobe-host-codex [role="main"] {
+  background: transparent !important;
+  color: var(--yujie-text) !important;
+}
+
+html.codedrobe-host-codex main.main-surface.dream-home-shell {
+  background-image:
+    linear-gradient(90deg, rgba(11, 5, 9, 0.97) 0%, rgba(16, 7, 12, 0.88) 42%, rgba(25, 10, 16, 0.32) 73%, rgba(28, 11, 17, 0.2) 100%),
+    linear-gradient(180deg, transparent 55%, rgba(10, 4, 7, 0.72)) !important;
+}
+
+html.codedrobe-host-codex main.main-surface.dream-home-shell::before {
+  background-position: center, center, right center;
+  opacity: 0.86;
+}
+
+html.codedrobe-host-codex .dream-home .heading-xl {
+  padding: 10px 22px !important;
+  border: 1px solid rgba(232, 174, 186, 0.24) !important;
+  border-radius: 16px !important;
+  background: linear-gradient(135deg, rgba(25, 10, 17, 0.7), rgba(69, 25, 38, 0.48)) !important;
+  color: #fff4f5 !important;
+  text-shadow: 0 2px 16px rgba(24, 3, 11, 0.9), 0 0 22px rgba(229, 138, 157, 0.18) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 221, 226, 0.1), 0 12px 34px rgba(5, 0, 3, 0.3) !important;
+  backdrop-filter: blur(10px) saturate(1.08);
+}
+
+html.codedrobe-host-codex .group\/home-suggestions > * {
+  border: 1px solid var(--yujie-border) !important;
+  border-radius: 14px !important;
+  background: linear-gradient(145deg, rgba(43, 18, 28, 0.88), rgba(18, 8, 13, 0.92)) !important;
+  color: var(--yujie-text) !important;
+  box-shadow: 0 14px 30px rgba(3, 0, 2, 0.3) !important;
+  backdrop-filter: blur(18px);
+}
+
+html.codedrobe-host-codex .group\/home-suggestions > *:hover {
+  border-color: rgba(255, 192, 203, 0.54) !important;
+  box-shadow: 0 16px 34px rgba(3, 0, 2, 0.36), inset 0 0 0 1px rgba(232, 174, 186, 0.13) !important;
+}
+
+html.codedrobe-host-codex .composer-surface-chrome {
+  position: relative;
+  overflow: visible !important;
+  border: 1px solid var(--yujie-border-strong) !important;
+  border-radius: 17px !important;
+  background: linear-gradient(145deg, rgba(39, 17, 26, 0.95), rgba(15, 7, 11, 0.97)) !important;
+  color: var(--yujie-text) !important;
+  box-shadow: 0 18px 46px rgba(3, 0, 2, 0.5), inset 0 1px 0 rgba(255, 221, 226, 0.11) !important;
+  backdrop-filter: blur(24px) saturate(1.12);
+}
+
+html.codedrobe-host-codex .composer-surface-chrome::before {
+  position: absolute;
+  z-index: 4;
+  top: -15px;
+  left: -14px;
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(255, 203, 213, 0.58);
+  border-radius: 50%;
+  content: "✦";
+  pointer-events: none;
+  color: #ffe2e7;
+  background: radial-gradient(circle at 35% 30%, #ef9fb1, #9d3855 58%, #411323 100%);
+  box-shadow: 0 7px 16px rgba(0, 0, 0, 0.48), 0 0 18px rgba(229, 138, 157, 0.28);
+  font: 700 15px/1 Georgia, serif;
+}
+
+html.codedrobe-host-codex .composer-surface-chrome:focus-within {
+  border-color: rgba(255, 192, 203, 0.74) !important;
+  box-shadow: 0 20px 52px rgba(3, 0, 2, 0.54), 0 0 0 1px rgba(229, 138, 157, 0.22), inset 0 1px 0 rgba(255, 221, 226, 0.15) !important;
+}
+
+html.codedrobe-host-codex .composer-surface-chrome :is(textarea, .ProseMirror, [contenteditable="true"]) {
+  color: var(--yujie-text) !important;
+  caret-color: var(--yujie-rose-bright) !important;
+}
+
+html.codedrobe-host-codex .composer-surface-chrome :is(button, [role="button"]):hover {
+  background: var(--yujie-rose-soft) !important;
+  color: #fff7f8 !important;
+}
+
+html.codedrobe-host-codex :is(article, [data-message-author-role]) {
+  color: var(--yujie-text) !important;
+}
+
+html.codedrobe-host-codex :is(pre, table, blockquote) {
+  border: 1px solid var(--yujie-border) !important;
+  border-radius: 10px !important;
+  background: rgba(17, 8, 13, 0.93) !important;
+  color: var(--yujie-text) !important;
+  box-shadow: 0 10px 28px rgba(3, 0, 2, 0.3) !important;
+}
+
+html.codedrobe-host-codex pre {
+  overflow: auto !important;
+  box-shadow: inset 3px 0 0 rgba(229, 138, 157, 0.66), 0 10px 28px rgba(3, 0, 2, 0.3) !important;
+}
+
+html.codedrobe-host-codex :is(a, button, input, textarea, [contenteditable="true"]) {
+  accent-color: var(--yujie-rose);
+}
+
+html.codedrobe-host-codex a {
+  color: #f3a9ba !important;
+  text-decoration-color: rgba(243, 169, 186, 0.45) !important;
+}
+
+html.codedrobe-host-codex :is(button, [role="button"]):focus-visible,
+html.codedrobe-host-codex :is(a, input, textarea, [contenteditable="true"]):focus-visible {
+  outline: 2px solid rgba(255, 192, 203, 0.78) !important;
+  outline-offset: 2px !important;
+}
+
+html.codedrobe-host-codex .top-\(--thread-floating-content-top-inset\) .bg-token-dropdown-background {
+  border: 1px solid var(--yujie-border) !important;
+  background: linear-gradient(160deg, rgba(45, 19, 29, 0.97), rgba(15, 7, 11, 0.99)) !important;
+  color: var(--yujie-text) !important;
+  box-shadow: 0 24px 60px rgba(3, 0, 2, 0.58), inset 0 1px 0 rgba(255, 221, 226, 0.1) !important;
+  backdrop-filter: blur(24px) saturate(1.08);
+}
+
+html.codedrobe-host-codex .group\/summary-panel-item {
+  color: var(--yujie-text) !important;
+}
+
+html.codedrobe-host-codex [data-radix-popper-content-wrapper] > [data-side],
+html.codedrobe-host-codex :is([role="tooltip"], [role="menu"], [role="listbox"]) {
+  border: 1px solid var(--yujie-border) !important;
+  background: rgba(24, 11, 17, 0.98) !important;
+  color: var(--yujie-text) !important;
+  box-shadow: 0 18px 46px rgba(3, 0, 2, 0.6) !important;
+  backdrop-filter: blur(20px) saturate(1.08);
+}
+
+html.codedrobe-host-codex :is([role="menuitem"], [role="option"]):is(:hover, [data-highlighted]) {
+  background: linear-gradient(90deg, var(--yujie-rose-soft), var(--yujie-gold-soft)) !important;
+  color: #fff7f8 !important;
+}
+
+html.codedrobe-host-codex [role="dialog"] {
+  border: 1px solid var(--yujie-border) !important;
+  background: linear-gradient(155deg, rgba(45, 19, 29, 0.98), rgba(13, 6, 10, 0.99)) !important;
+  color: var(--yujie-text) !important;
+  box-shadow: 0 30px 80px rgba(3, 0, 2, 0.7) !important;
+}
+
+html.codedrobe-host-codex * {
+  scrollbar-color: rgba(229, 138, 157, 0.58) rgba(12, 5, 9, 0.48);
+}
+
+html.codedrobe-host-codex *::-webkit-scrollbar {
+  width: 9px;
+  height: 9px;
+}
+
+html.codedrobe-host-codex *::-webkit-scrollbar-track {
+  background: rgba(12, 5, 9, 0.42);
+}
+
+html.codedrobe-host-codex *::-webkit-scrollbar-thumb {
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background: linear-gradient(180deg, #bf536e, #754052) padding-box;
+}
+
+@media (max-width: 980px) {
+  html.codedrobe-host-codex :is(main.main-surface, #root main)::before {
+    background-image:
+      linear-gradient(90deg, rgba(11, 5, 9, 0.96), rgba(16, 7, 12, 0.52)),
+      linear-gradient(180deg, rgba(0, 0, 0, 0.18), rgba(10, 4, 7, 0.66)),
+      var(--codedrobe-image-hero);
+    background-position: center, center, right -90px center;
+    opacity: 0.42;
+  }
+
+  html.codedrobe-host-codex main.main-surface.dream-home-shell::before {
+    background-position: center, center, right -55px center;
+    opacity: 0.72;
+  }
+}
+
+@media (max-width: 760px) {
+  html.codedrobe-host-codex :is(main.main-surface, #root main)::before {
+    background-image:
+      linear-gradient(rgba(11, 5, 9, 0.74), rgba(11, 5, 9, 0.86)),
+      linear-gradient(180deg, transparent, rgba(10, 4, 7, 0.72)),
+      var(--codedrobe-image-hero);
+    background-position: center, center, right -55px center;
+    opacity: 0.28;
+  }
+
+  html.codedrobe-host-codex main.main-surface.dream-home-shell::before {
+    background-position: center, center, right -34px center;
+    opacity: 0.48;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html.codedrobe-host-codex *,
+  html.codedrobe-host-codex *::before,
+  html.codedrobe-host-codex *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
