@@ -74,6 +74,15 @@
   </tr>
 </table>
 
+## v2.3.1 更新
+
+- 修复部分 Microsoft Store 安装的 Codex / ChatGPT 启动时报“拒绝访问（错误码 5）”的问题：直接启动失败时，自动尝试应用包身份兼容启动。
+- 在应用包上下文中显式传递代理环境变量，不修改 Windows 系统代理。
+- 隐藏兼容启动辅助进程，避免启动时短暂闪出 PowerShell 黑框。
+- 同步修复新版桌面启动器与旧版轻量启动器，相关反馈见 [#10](https://github.com/gaopengbin/codex-launch-deck/issues/10)。
+
+> 兼容路径依赖 Windows 的 `Invoke-CommandInDesktopPackage` 与 Windows Script Host；企业策略禁用相关组件时仍可能无法使用。
+
 ## v2.3.0 更新
 
 - 新增 Windows 系统托盘，关闭主窗口后继续在后台运行，可从托盘打开、检查更新或彻底退出。

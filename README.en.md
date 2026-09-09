@@ -52,6 +52,15 @@
 | --- | --- |
 | ![AI theme creation](docs/images/ai-theme-creation.png) | ![A CodeDrobe theme applied to Codex](docs/images/theme-applied-codex.png) |
 
+## What's new in v2.3.1
+
+- Fix access denied (OS error 5) when launching some Microsoft Store installations of Codex / ChatGPT by retrying with package identity.
+- Explicitly pass proxy environment variables in the package context without changing the Windows system proxy.
+- Hide the compatibility helper to avoid a brief PowerShell console flash.
+- Apply the fix to both the desktop and legacy lightweight launchers. See [#10](https://github.com/gaopengbin/codex-launch-deck/issues/10).
+
+> The fallback requires Windows `Invoke-CommandInDesktopPackage` and Windows Script Host. It may be unavailable where enterprise policy disables these components.
+
 ## What's new in v2.1.1
 
 - Added a complete component-coverage contract for AI-generated themes.
