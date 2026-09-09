@@ -3285,21 +3285,47 @@ fn launch_codex_desktop(proxy: &ProxyConfig) -> Result<PathBuf, String> {
     }
 
     let mut failures = Vec::new();
+    let mut access_denied = false;
     for executable in candidates {
         let mut command = Command::new(&executable);
         apply_proxy_environment(&mut command, proxy);
         match command.spawn() {
             Ok(_) => return Ok(executable),
-            Err(error) => failures.push(format!(
-                "{}：{error}",
-                executable
-                    .file_name()
-                    .and_then(|name| name.to_str())
-                    .unwrap_or("未知入口")
-            )),
+            Err(error) => {
+                access_denied |= error.raw_os_error() == Some(5);
+                failures.push(format!(
+                    "{}：{error}",
+                    executable
+                        .file_name()
+                        .and_then(|name| name.to_str())
+                        .unwrap_or("未知入口")
+                ));
+            }
         }
     }
 
+    if access_denied {
+        let script = format!(
+            "& {{\n{}\n}} -ProxyUrl $env:HTTPS_PROXY",
+            include_str!("../../../compat/launch-packaged-app.ps1")
+        );
+        let bytes: Vec<u8> = script.encode_utf16().flat_map(u16::to_le_bytes).collect();
+        let mut command = background_command("powershell.exe");
+        command.args([
+            "-NoProfile",
+            "-NonInteractive",
+            "-EncodedCommand",
+            &BASE64.encode(bytes),
+        ]);
+        apply_proxy_environment(&mut command, proxy);
+        match command.output() {
+            Ok(output) if output.status.success() => {
+                return find_codex_executable().ok_or_else(|| "启动后无法定位应用路径".to_string());
+            }
+            Ok(output) => failures.push(String::from_utf8_lossy(&output.stderr).trim().to_string()),
+            Err(error) => failures.push(error.to_string()),
+        }
+    }
     Err(format!("启动 Codex 失败：{}", failures.join("；")))
 }
 

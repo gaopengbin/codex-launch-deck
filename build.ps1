@@ -8,6 +8,7 @@ $windowsDir = Split-Path -Parent ([Environment]::SystemDirectory)
     /nologo /target:winexe /optimize+ `
     /win32icon:"$projectDir\assets\app-icon.ico" `
     /out:"$outputDir\ChatGPTProxyLauncher.exe" `
+    /resource:"$projectDir\compat\launch-packaged-app.ps1",launch-packaged-app.ps1 `
     /reference:System.dll /reference:System.Core.dll /reference:System.Drawing.dll /reference:System.Windows.Forms.dll /reference:System.Web.Extensions.dll `
     "$projectDir\src\Program.cs"
 

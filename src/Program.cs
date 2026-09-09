@@ -264,7 +264,14 @@ namespace ChatGPTProxyLauncherLite
 
                     var info = new ProcessStartInfo(executable) { UseShellExecute = false };
                     ApplyProxyEnvironment(info, proxyUrl);
-                    Process.Start(info);
+                    bool usePackageIdentity = false;
+                    try { Process.Start(info); }
+                    catch (System.ComponentModel.Win32Exception error)
+                    {
+                        if (error.NativeErrorCode != 5) throw;
+                        usePackageIdentity = true;
+                    }
+                    if (usePackageIdentity) await Task.Run(() => LaunchWithPackageIdentity(proxyUrl));
                     SetStatus(L("已通过 " + proxyUrl + " 启动 ChatGPT", "ChatGPT started through " + proxyUrl), true);
                 }
             }
@@ -615,6 +622,34 @@ namespace ChatGPTProxyLauncherLite
             try { return process.MainModule.FileName.EndsWith("\\app\\" + fileName, StringComparison.OrdinalIgnoreCase); }
             catch { return false; }
             finally { process.Dispose(); }
+        }
+
+        private static void LaunchWithPackageIdentity(string proxyUrl)
+        {
+            string script;
+            using (var stream = typeof(LauncherForm).Assembly.GetManifestResourceStream("launch-packaged-app.ps1"))
+            {
+                if (stream == null) throw new Exception("Package launch helper is missing. Rebuild the launcher.");
+                using (var reader = new StreamReader(stream)) script = reader.ReadToEnd();
+            }
+            string command = "& {\n" + script + "\n} -ProxyUrl $env:HTTPS_PROXY";
+            string encoded = Convert.ToBase64String(System.Text.Encoding.Unicode.GetBytes(command));
+            var info = new ProcessStartInfo("powershell.exe", "-NoProfile -NonInteractive -EncodedCommand " + encoded)
+            {
+                UseShellExecute = false,
+                CreateNoWindow = true,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true
+            };
+            ApplyProxyEnvironment(info, proxyUrl);
+            using (var process = Process.Start(info))
+            {
+                var output = process.StandardOutput.ReadToEndAsync();
+                var errors = process.StandardError.ReadToEndAsync();
+                process.WaitForExit();
+                Task.WaitAll(output, errors);
+                if (process.ExitCode != 0) throw new Exception("Package launch failed: " + errors.Result);
+            }
         }
 
         private static string FindDesktopExecutable()
