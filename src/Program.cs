@@ -5,6 +5,7 @@ using System.Drawing;
 using System.IO;
 using System.Linq;
 using System.Net.Sockets;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 using System.Web.Script.Serialization;
@@ -241,14 +242,23 @@ namespace ChatGPTProxyLauncherLite
                     if (themePath == null) throw new Exception(L("未找到 CodeDrobe 主题包。", "The CodeDrobe theme package was not found."));
 
                     SetStatus(L("正在通过 CodeDrobe 启动并应用主题…", "Starting Codex and applying the theme through CodeDrobe…"), null);
+                    StartPackagedChatGPT(proxyUrl, CodeDrobePort);
+                    bool cdpReady = await Task.Run(() => {
+                        for (int attempt = 0; attempt < 50; attempt++) {
+                            if (CanConnect("127.0.0.1", CodeDrobePort)) return true;
+                            Thread.Sleep(300);
+                        }
+                        return false;
+                    });
+                    if (!cdpReady) throw new InvalidOperationException("ChatGPT started, but its theme debugging port did not open.");
                     string applyArguments =
                         "apply --app codex --port " + CodeDrobePort +
-                        " --theme " + QuoteArgument(themePath);
+                        " --theme " + QuoteArgument(themePath) + " --no-launch";
                     CodeDrobeResult apply = await RunCodeDrobeAsync(applyArguments, proxyUrl);
                     if (apply.ExitCode != 0) throw new Exception(GetCodeDrobeError(apply));
 
                     themeWatcher = StartCodeDrobe(
-                        applyArguments + " --no-launch --watch",
+                        applyArguments + " --watch",
                         proxyUrl,
                         true);
 
@@ -259,12 +269,7 @@ namespace ChatGPTProxyLauncherLite
                 else
                 {
                     SetStatus(L("正在查找 ChatGPT…", "Finding ChatGPT…"), null);
-                    string executable = await Task.Run(() => FindDesktopExecutable());
-                    if (executable == null) throw new Exception(L("未找到 ChatGPT/Codex Windows 桌面应用。", "ChatGPT/Codex Desktop was not found."));
-
-                    var info = new ProcessStartInfo(executable) { UseShellExecute = false };
-                    ApplyProxyEnvironment(info, proxyUrl);
-                    Process.Start(info);
+                    StartPackagedChatGPT(proxyUrl, null);
                     SetStatus(L("已通过 " + proxyUrl + " 启动 ChatGPT", "ChatGPT started through " + proxyUrl), true);
                 }
             }
@@ -617,27 +622,27 @@ namespace ChatGPTProxyLauncherLite
             finally { process.Dispose(); }
         }
 
-        private static string FindDesktopExecutable()
+        private static void StartPackagedChatGPT(string proxyUrl, int? cdpPort)
         {
-            const string command = "$p=@(Get-AppxPackage -Name 'OpenAI.Codex';Get-AppxPackage -Name 'OpenAI.ChatGPT-Desktop')|Sort-Object Version -Descending|Select-Object -First 1;if($p){$p.InstallLocation}";
-            var info = new ProcessStartInfo("powershell.exe", "-NoLogo -NoProfile -NonInteractive -Command \"" + command + "\"")
+            string helper = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "PackagedChatGPTLauncher.exe");
+            if (!File.Exists(helper))
+                throw new FileNotFoundException("PackagedChatGPTLauncher.exe is missing.", helper);
+            string arguments = QuoteArgument(proxyUrl) + (cdpPort.HasValue ? " " + cdpPort.Value : "");
+            var info = new ProcessStartInfo(helper, arguments)
             {
                 UseShellExecute = false,
                 RedirectStandardOutput = true,
+                RedirectStandardError = true,
                 CreateNoWindow = true
             };
             using (var process = Process.Start(info))
             {
-                string location = process.StandardOutput.ReadToEnd().Trim();
+                string output = process.StandardOutput.ReadToEnd().Trim();
+                string error = process.StandardError.ReadToEnd().Trim();
                 process.WaitForExit();
-                if (process.ExitCode != 0 || location.Length == 0) return null;
-                foreach (string name in new[] { "ChatGPT.exe", "Codex.exe" })
-                {
-                    string path = Path.Combine(location, "app", name);
-                    if (File.Exists(path)) return path;
-                }
+                if (process.ExitCode != 0 || output.Length == 0)
+                    throw new InvalidOperationException(error.Length == 0 ? "ChatGPT package activation failed." : error);
             }
-            return null;
         }
 
         private sealed class CodeDrobeResult

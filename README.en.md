@@ -32,9 +32,9 @@
 
 ## Three jobs, one launch deck
 
-| Process-scoped proxy | Theme store and live switching | Local Codex-powered creation |
+| App proxy launch | Theme store and live switching | Local Codex-powered creation |
 | --- | --- | --- |
-| Passes `HTTP_PROXY`, `HTTPS_PROXY`, and `NO_PROXY` only to the Codex process tree. It never changes the Windows system proxy. | Search, install, cache, and apply CodeDrobe themes. A managed watcher restores the theme after renderer reloads. | Turn a brief or reference image into a validated `.codedrobe-theme` with your already authenticated Codex CLI. No extra API key is required. |
+| Activates the registered ChatGPT package with proxy variables. The launcher briefly sets them in the current user's environment, restores their prior values after process creation, and never changes the Windows system proxy. Another app started during that brief window may read them. | Search, install, cache, and apply CodeDrobe themes. A managed watcher restores the theme after renderer reloads. | Turn a brief or reference image into a validated `.codedrobe-theme` with your already authenticated Codex CLI. No extra API key is required. |
 
 ## Highlights
 

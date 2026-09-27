@@ -1,5 +1,8 @@
 $ErrorActionPreference = 'Stop'
 $projectDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+$packageLauncher = Join-Path $projectDir 'compat\PackagedChatGPTLauncher.exe'
+& (Join-Path $projectDir 'build-package-launcher.ps1')
+if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 $outputDir = Join-Path $projectDir 'output'
 New-Item -ItemType Directory -Path $outputDir -Force | Out-Null
 
@@ -12,6 +15,7 @@ $windowsDir = Split-Path -Parent ([Environment]::SystemDirectory)
     "$projectDir\src\Program.cs"
 
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+Copy-Item -LiteralPath $packageLauncher -Destination (Join-Path $outputDir 'PackagedChatGPTLauncher.exe') -Force
 
 $themeSource = Join-Path $projectDir 'themes\miku-future-beats-1.2.3.codedrobe-theme'
 if (Test-Path -LiteralPath $themeSource) {

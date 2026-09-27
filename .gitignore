@@ -1,6 +1,7 @@
 **/bin/
 **/obj/
 output/
+compat/PackagedChatGPTLauncher.exe
 release/
 desktop/src-tauri/target-*/
 desktop/src-tauri/app-icon-zoomed.png

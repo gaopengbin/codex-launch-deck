@@ -762,7 +762,9 @@ fn launch_codex_blocking(
         set_active_port(watcher, selected_port)?;
         let port = selected_port.to_string();
         let path = theme_path.to_string_lossy().into_owned();
-        let apply_args = ["apply", "--app", "codex", "--port", &port, "--theme", &path];
+        launch_codex_desktop(app, &request.proxy, Some(selected_port))?;
+        wait_for_codex_theme_surface(selected_port, Duration::from_secs(20))?;
+        let apply_args = ["apply", "--app", "codex", "--port", &port, "--theme", &path, "--no-launch"];
         let retry_args = [
             "apply",
             "--app",
@@ -855,7 +857,7 @@ fn launch_codex_blocking(
             warning: runtime_warning.is_some(),
         })
     } else {
-        launch_codex_desktop(&request.proxy)?;
+        launch_codex_desktop(app, &request.proxy, None)?;
         Ok(ActionResult {
             message: "Codex 已通过代理启动".to_string(),
             theme_path: None,
@@ -3278,29 +3280,48 @@ fn desktop_executable_candidates(location: &Path) -> [PathBuf; 2] {
     ["ChatGPT.exe", "Codex.exe"].map(|name| location.join("app").join(name))
 }
 
-fn launch_codex_desktop(proxy: &ProxyConfig) -> Result<PathBuf, String> {
-    let candidates = find_codex_executables();
-    if candidates.is_empty() {
-        return Err("未找到 Codex / ChatGPT Windows 桌面应用。".to_string());
+fn packaged_launcher_path(app: &AppHandle) -> Option<PathBuf> {
+    let mut candidates = Vec::new();
+    if let Ok(resources) = app.path().resource_dir() {
+        candidates.push(resources.join("bin").join("PackagedChatGPTLauncher.exe"));
     }
-
-    let mut failures = Vec::new();
-    for executable in candidates {
-        let mut command = Command::new(&executable);
-        apply_proxy_environment(&mut command, proxy);
-        match command.spawn() {
-            Ok(_) => return Ok(executable),
-            Err(error) => failures.push(format!(
-                "{}：{error}",
-                executable
-                    .file_name()
-                    .and_then(|name| name.to_str())
-                    .unwrap_or("未知入口")
-            )),
+    if let Ok(executable) = env::current_exe() {
+        if let Some(directory) = executable.parent() {
+            candidates.push(directory.join("PackagedChatGPTLauncher.exe"));
         }
     }
+    #[cfg(debug_assertions)]
+    candidates.push(
+        Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../..")
+            .join("compat")
+            .join("PackagedChatGPTLauncher.exe"),
+    );
+    candidates.into_iter().find(|path| path.is_file())
+}
 
-    Err(format!("启动 Codex 失败：{}", failures.join("；")))
+fn launch_codex_desktop(
+    app: &AppHandle,
+    proxy: &ProxyConfig,
+    cdp_port: Option<u16>,
+) -> Result<u32, String> {
+    let helper = packaged_launcher_path(app)
+        .ok_or_else(|| "PackagedChatGPTLauncher.exe is missing from Launch Deck.".to_string())?;
+    let mut command = background_command(&helper);
+    command.arg(proxy_url(proxy));
+    if let Some(port) = cdp_port {
+        command.arg(port.to_string());
+    }
+    let output = command
+        .output()
+        .map_err(|error| format!("Cannot activate ChatGPT package: {error}"))?;
+    if !output.status.success() {
+        return Err(String::from_utf8_lossy(&output.stderr).trim().to_string());
+    }
+    String::from_utf8_lossy(&output.stdout)
+        .trim()
+        .parse::<u32>()
+        .map_err(|_| "Windows did not return a ChatGPT process ID.".to_string())
 }
 
 fn is_codex_running() -> bool {
@@ -3310,7 +3331,7 @@ fn is_codex_running() -> bool {
             "-NoProfile",
             "-NonInteractive",
             "-Command",
-            "$p=Get-Process -Name Codex,ChatGPT -ErrorAction SilentlyContinue|Where-Object{$_.MainWindowHandle -ne 0 -and $_.Path -like '*\\WindowsApps\\OpenAI.Codex_*\\app\\*'};if($p){exit 0};exit 1",
+            "$p=Get-CimInstance Win32_Process -Filter \"name = 'ChatGPT.exe' or name = 'Codex.exe'\"|Where-Object{$_.ExecutablePath -like '*\\WindowsApps\\OpenAI.*\\app\\*' -and $_.CommandLine -notlike '*--type=*'};if($p){exit 0};exit 1",
         ])
         .status()
         .map(|status| status.success())
