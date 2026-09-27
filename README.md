@@ -15,7 +15,7 @@
 
 <p align="center">
   <strong>Windows 上的 Codex 启动与主题工作台。</strong><br>
-  只代理本次启动的 Codex，不修改系统代理；浏览、安装、即时切换 CodeDrobe 主题，并复用本机已登录的 Codex 创作完整主题。
+  通过本地代理启动 Codex，不修改 Windows 系统代理；浏览、安装、即时切换 CodeDrobe 主题，并复用本机已登录的 Codex 创作完整主题。
 </p>
 
 <p align="center">
@@ -74,6 +74,21 @@
   </tr>
 </table>
 
+## v2.3.2 更新
+
+- 适配新版 ChatGPT Windows 应用包：通过注册的应用入口启动，修复直接执行 `ChatGPT.exe` 时“该进程没有程序包标识符”的报错。
+- 启动时短暂设置当前用户的代理环境变量，并在应用进程创建后恢复原值；同时为 ChatGPT 传递代理参数。
+- 新版安装包内置启动辅助程序；旧版启动器请下载 ZIP，保留两个 EXE 在同一目录。
+
+## v2.3.1 更新
+
+- 修复部分 Microsoft Store 安装的 Codex / ChatGPT 启动时报“拒绝访问（错误码 5）”的问题：直接启动失败时，自动尝试应用包身份兼容启动。
+- 在应用包上下文中显式传递代理环境变量，不修改 Windows 系统代理。
+- 隐藏兼容启动辅助进程，避免启动时短暂闪出 PowerShell 黑框。
+- 同步修复新版桌面启动器与旧版轻量启动器，相关反馈见 [#10](https://github.com/gaopengbin/codex-launch-deck/issues/10)。
+
+> 兼容路径依赖 Windows 的 `Invoke-CommandInDesktopPackage` 与 Windows Script Host；企业策略禁用相关组件时仍可能无法使用。
+
 ## v2.3.0 更新
 
 - 新增 Windows 系统托盘，关闭主窗口后继续在后台运行，可从托盘打开、检查更新或彻底退出。
@@ -105,8 +120,7 @@
 | --- | --- |
 | `Codex.Proxy.Launch.Deck_*_x64-setup.exe` | 推荐，大多数 Windows 用户使用的 NSIS 安装包 |
 | `Codex.Proxy.Launch.Deck_*_x64_en-US.msi` | 适合 MSI 部署与企业安装环境 |
-| `ChatGPTProxyLauncher.exe` | 只需要代理启动能力的旧版轻量单文件 |
-| `ChatGPTProxyLauncher-Legacy-win-x64.zip` | 旧版启动器、内置主题与快捷方式脚本合集 |
+| `ChatGPTProxyLauncher-Legacy-win-x64.zip` | 旧版启动器、必需的启动辅助程序、内置主题与快捷方式脚本合集 |
 
 公开二进制目前尚未进行代码签名，Windows SmartScreen 可能显示安全提示。请始终从本仓库 Release 页面下载。
 

@@ -15,7 +15,7 @@
 
 <p align="center">
   <strong>A Windows launch and theme workstation for Codex.</strong><br>
-  Route only the launched Codex process through a proxy, browse and hot-swap CodeDrobe themes, and reuse your signed-in local Codex to create complete themes.
+  Launch Codex through a local proxy without changing the Windows system proxy, browse and hot-swap CodeDrobe themes, and reuse your signed-in local Codex to create complete themes.
 </p>
 
 <p align="center">
@@ -52,6 +52,21 @@
 | --- | --- |
 | ![AI theme creation](docs/images/ai-theme-creation.png) | ![A CodeDrobe theme applied to Codex](docs/images/theme-applied-codex.png) |
 
+## What's new in v2.3.2
+
+- Activate the updated ChatGPT Windows package through its registered app entry point, fixing the “process has no package identity” startup error.
+- Temporarily set current-user proxy environment values for package activation, restore their previous values after process creation, and pass proxy arguments to ChatGPT.
+- Bundle the required launch helper with the desktop installer and legacy ZIP. Keep both EXEs together when using the legacy launcher.
+
+## What's new in v2.3.1
+
+- Fix access denied (OS error 5) when launching some Microsoft Store installations of Codex / ChatGPT by retrying with package identity.
+- Explicitly pass proxy environment variables in the package context without changing the Windows system proxy.
+- Hide the compatibility helper to avoid a brief PowerShell console flash.
+- Apply the fix to both the desktop and legacy lightweight launchers. See [#10](https://github.com/gaopengbin/codex-launch-deck/issues/10).
+
+> The fallback requires Windows `Invoke-CommandInDesktopPackage` and Windows Script Host. It may be unavailable where enterprise policy disables these components.
+
 ## What's new in v2.1.1
 
 - Added a complete component-coverage contract for AI-generated themes.
@@ -75,8 +90,7 @@
 | --- | --- |
 | `Codex.Proxy.Launch.Deck_*_x64-setup.exe` | Recommended NSIS installer |
 | `Codex.Proxy.Launch.Deck_*_x64_en-US.msi` | MSI deployment |
-| `ChatGPTProxyLauncher.exe` | Legacy lightweight single-file proxy launcher |
-| `ChatGPTProxyLauncher-Legacy-win-x64.zip` | Legacy launcher, bundled theme, and shortcut helper |
+| `ChatGPTProxyLauncher-Legacy-win-x64.zip` | Legacy launcher, required launch helper, bundled theme, and shortcut helper |
 
 Public binaries are currently unsigned, so Windows SmartScreen may display a warning. Always download from this repository's Release page.
 

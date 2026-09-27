@@ -52,7 +52,7 @@ jobs:
           Copy-Item README.zh-CN.md output\README.zh-CN.md
           Copy-Item LICENSE output\LICENSE
           Copy-Item Create-Desktop-Shortcut.ps1 output\Create-Desktop-Shortcut.ps1
-          Compress-Archive -Path output\ChatGPTProxyLauncher.exe,output\Create-Desktop-Shortcut.ps1,output\README.md,output\README.zh-CN.md,output\LICENSE,output\themes -DestinationPath output\ChatGPTProxyLauncher-Legacy-win-x64.zip
+          Compress-Archive -Path output\ChatGPTProxyLauncher.exe,output\PackagedChatGPTLauncher.exe,output\Create-Desktop-Shortcut.ps1,output\README.md,output\README.zh-CN.md,output\LICENSE,output\themes -DestinationPath output\ChatGPTProxyLauncher-Legacy-win-x64.zip
 
       - name: Build updater manifest
         if: startsWith(github.ref, 'refs/tags/')
@@ -103,7 +103,6 @@ jobs:
             desktop/src-tauri/target/release/bundle/msi/*.zip
             desktop/src-tauri/target/release/bundle/msi/*.sig
             desktop/src-tauri/target/release/bundle/latest.json
-            output/ChatGPTProxyLauncher.exe
             output/ChatGPTProxyLauncher-Legacy-win-x64.zip
 
       - name: Publish GitHub Release
@@ -118,6 +117,5 @@ jobs:
             desktop/src-tauri/target/release/bundle/msi/*.zip
             desktop/src-tauri/target/release/bundle/msi/*.sig
             desktop/src-tauri/target/release/bundle/latest.json
-            output/ChatGPTProxyLauncher.exe
             output/ChatGPTProxyLauncher-Legacy-win-x64.zip
           generate_release_notes: true

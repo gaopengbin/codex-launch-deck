@@ -510,7 +510,7 @@ dependencies = [
 
 [[package]]
 name = "codex-launch-deck"
-version = "2.3.0"
+version = "2.3.2"
 dependencies = [
  "base64 0.22.1",
  "encoding_rs",
