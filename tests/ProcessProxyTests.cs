@@ -42,7 +42,7 @@ class Tests
     static int Main(string[] args)
     {
         if(args.Length>0 && args[0]=="--timeout-worker") return BrokerSession.Run(new StringReader(Plan().Serialize()+"\nSTART\n"),Console.Out,p=>p.Validate(),p=>true,()=>new Engine{HangStart=true},100);
-        if(args.Length>0 && args[0]=="--controlled-exit-worker") { Console.InputEncoding=Encoding.Unicode; Console.WriteLine("WAITING"); Console.Out.Flush(); using(var controlInput=new StreamReader(Console.OpenStandardInput(),new UTF8Encoding(false),false)) return controlInput.ReadLine()=="EXIT"?0:8; }
+        if(args.Length>0 && args[0]=="--controlled-exit-worker") { Console.InputEncoding=Encoding.Unicode; Console.WriteLine("WAITING"); Console.Out.Flush(); using(var controlInput=new StreamReader(Console.OpenStandardInput(),new UTF8Encoding(false),true)) return controlInput.ReadLine()=="EXIT"?0:8; }
         if(args.Length>0 && args[0]=="--delayed-exit-worker") { Thread.Sleep(100); return 0; }
         if(args.Length>0 && args[0]=="--crash-worker") { Console.WriteLine("READY"); Console.Out.Flush(); return 9; }
         if(args.Length==2 && (args[0]=="--pipe-worker" || args[0]=="--cancel-pipe-worker"))
@@ -110,6 +110,8 @@ class Tests
             Check(!newCancellation.IsCancellationRequested && !newPipe.SafePipeHandle.IsClosed,"old cancellation cannot dispose newer session");
             Check(Object.ReferenceEquals(typeof(ProxyController).GetField("pipe",fields).GetValue(race),newPipe),"newer session ownership preserved");
         }
+        // Framework Process.StandardInput may emit its UTF8 preamble before BaseStream is obtained.
+        using(var preambleInput=new StreamReader(new MemoryStream(new byte[]{0xEF,0xBB,0xBF,69,88,73,84,10}),new UTF8Encoding(false),true)) Check(preambleInput.ReadLine()=="EXIT","controlled worker accepts Framework stdin preamble without treating it as command payload");
         var held=new ProxyController();
         var heldChild=Process.Start(new ProcessStartInfo(Process.GetCurrentProcess().MainModule.FileName,"--controlled-exit-worker") { UseShellExecute=false,CreateNoWindow=true,RedirectStandardInput=true,RedirectStandardOutput=true });
         Check(heldChild.StandardOutput.ReadLine()=="WAITING","controlled child waits for explicit release");
