@@ -113,7 +113,8 @@ class Tests
         var held=new ProxyController();
         var heldChild=Process.Start(new ProcessStartInfo(Process.GetCurrentProcess().MainModule.FileName,"--controlled-exit-worker") { UseShellExecute=false,CreateNoWindow=true,RedirectStandardInput=true,RedirectStandardOutput=true });
         Check(heldChild.StandardOutput.ReadLine()=="WAITING","controlled child waits for explicit release");
-        var release=heldChild.StandardInput;
+        // Match the BOM-free wire encoding used by the production control pipe; Console defaults vary on CI.
+        var release=new StreamWriter(heldChild.StandardInput.BaseStream,new UTF8Encoding(false)) { AutoFlush=true };
         var watch=Stopwatch.StartNew();
         Reject(()=>held.ReapOwnedHost(heldChild),"seven-second live host wait reports unconfirmed cleanup");
         Check(watch.ElapsedMilliseconds>=7000 && !heldChild.HasExited,"real >7-second branch retains a live process handle");
@@ -121,7 +122,7 @@ class Tests
         Reject(()=>held.EnsureCleanupConfirmed(),"pending exit blocks next enhanced session before installation or elevation");
         release.WriteLine("EXIT");release.Flush();
         Check(SpinWait.SpinUntil(()=>held.PendingCleanup==0,3000),"observer confirms released child exit");
-        Check(held.LastCleanupRecord.Contains("confirmed exit, code 0"),"successful eventual exit recorded");
+        Check(held.LastCleanupRecord.Contains("confirmed exit, code 0"),"successful eventual exit recorded: "+held.LastCleanupRecord);
         held.EnsureCleanupConfirmed(); Check(true,"confirmed clean exit permits next session");
         var primary=new TimeoutException("token=DO-NOT-LOG private user payload");
         var secondary=new IOException("secret cleanup path");
