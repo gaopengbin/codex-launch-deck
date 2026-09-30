@@ -42,7 +42,7 @@ class Tests
     static int Main(string[] args)
     {
         if(args.Length>0 && args[0]=="--timeout-worker") return BrokerSession.Run(new StringReader(Plan().Serialize()+"\nSTART\n"),Console.Out,p=>p.Validate(),p=>true,()=>new Engine{HangStart=true},100);
-        if(args.Length>0 && args[0]=="--controlled-exit-worker") { Console.WriteLine("WAITING"); Console.Out.Flush(); return Console.ReadLine()=="EXIT"?0:8; }
+        if(args.Length>0 && args[0]=="--controlled-exit-worker") { Console.InputEncoding=Encoding.Unicode; Console.WriteLine("WAITING"); Console.Out.Flush(); using(var controlInput=new StreamReader(Console.OpenStandardInput(),new UTF8Encoding(false),false)) return controlInput.ReadLine()=="EXIT"?0:8; }
         if(args.Length>0 && args[0]=="--delayed-exit-worker") { Thread.Sleep(100); return 0; }
         if(args.Length>0 && args[0]=="--crash-worker") { Console.WriteLine("READY"); Console.Out.Flush(); return 9; }
         if(args.Length==2 && (args[0]=="--pipe-worker" || args[0]=="--cancel-pipe-worker"))
