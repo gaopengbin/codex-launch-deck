@@ -1,7 +1,7 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "Codex Proxy Launch Deck",
-  "version": "2.3.2",
+  "version": "2.4.0",
   "identifier": "dev.geod.codex-launch-deck",
   "build": {
     "frontendDist": "../dist",
@@ -31,7 +31,10 @@
   "bundle": {
     "active": true,
     "createUpdaterArtifacts": true,
-    "targets": ["nsis", "msi"],
+    "targets": [
+      "nsis",
+      "msi"
+    ],
     "resources": {
       "../../compat/PackagedChatGPTLauncher.exe": "bin/PackagedChatGPTLauncher.exe",
       "../../themes/miku-future-beats-1.2.3.codedrobe-theme": "themes/miku-future-beats-1.2.3.codedrobe-theme",

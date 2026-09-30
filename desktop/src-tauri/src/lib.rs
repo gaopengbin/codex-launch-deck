@@ -2910,7 +2910,9 @@ fn proxy_url(proxy: &ProxyConfig) -> String {
 
 fn apply_proxy_environment(command: &mut Command, proxy: &ProxyConfig) {
     let proxy = proxy_url(proxy);
-    for key in ["HTTP_PROXY", "HTTPS_PROXY", "http_proxy", "https_proxy"] {
+    for key in [
+        "HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "http_proxy", "https_proxy", "all_proxy",
+    ] {
         command.env(key, &proxy);
     }
     command.env("NO_PROXY", "localhost,127.0.0.1,::1");
@@ -4066,6 +4068,10 @@ mod tests {
             Some("http://127.0.0.1:10808")
         );
         assert_eq!(env_value("NODE_USE_ENV_PROXY").as_deref(), Some("1"));
+        assert_eq!(env_value("ALL_PROXY").as_deref(), Some("http://127.0.0.1:10808"));
+        // Windows stores environment keys case-insensitively.
+        #[cfg(not(windows))]
+        assert_eq!(env_value("all_proxy").as_deref(), Some("http://127.0.0.1:10808"));
     }
 
     #[test]

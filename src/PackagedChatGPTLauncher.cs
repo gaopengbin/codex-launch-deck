@@ -1,7 +1,9 @@
-using System;
+﻿using System;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Threading;
+using System.IO;
+using System.Text;
 using Microsoft.Win32;
 
 // Store apps must be activated by their registered AppUserModelId. Windows
@@ -12,7 +14,7 @@ internal static class PackagedChatGPTLauncher
 {
     private const string BackupPath = @"Software\GeoD\CodexProxyLaunchDeck\ProxyEnvBackup";
     private static readonly string[] ProxyKeys = {
-        "HTTP_PROXY", "HTTPS_PROXY", "NO_PROXY", "NODE_USE_ENV_PROXY"
+        "HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "NO_PROXY", "NODE_USE_ENV_PROXY"
     };
 
     [ComImport, Guid("2E941141-7F97-4756-BA1D-9DECDE894A3D"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
@@ -28,16 +30,16 @@ internal static class PackagedChatGPTLauncher
     private static int Main(string[] args)
     {
         Uri proxy;
-        if (args.Length < 1 || args.Length > 2 || !Uri.TryCreate(args[0], UriKind.Absolute, out proxy)
+        if (args.Length < 1 || args.Length > 3 || !Uri.TryCreate(args[0], UriKind.Absolute, out proxy)
             || proxy.Scheme != Uri.UriSchemeHttp || String.IsNullOrEmpty(proxy.Host) || proxy.Port <= 0
             || proxy.AbsolutePath != "/")
         {
-            Console.Error.WriteLine("Usage: PackagedChatGPTLauncher.exe http://host:port [cdp-port]");
+            Console.Error.WriteLine("Usage: PackagedChatGPTLauncher.exe http://host:port [cdp-port [expected-package-executable]]");
             return 2;
         }
 
         int cdpPort = 0;
-        if (args.Length == 2 && (!Int32.TryParse(args[1], out cdpPort) || cdpPort < 1 || cdpPort > 65535))
+        if (args.Length >= 2 && (!Int32.TryParse(args[1], out cdpPort) || cdpPort < (args.Length == 3 ? 0 : 1) || cdpPort > 65535))
         {
             Console.Error.WriteLine("Invalid CDP port.");
             return 2;
@@ -55,7 +57,7 @@ internal static class PackagedChatGPTLauncher
                 try
                 {
                     RestorePreviousEnvironment();
-                    string family = FindPackageFamily();
+                    string family = FindPackageFamily(args.Length == 3 ? args[2] : null);
                     if (family == null)
                         throw new InvalidOperationException("ChatGPT/Codex Store package is not installed.");
 
@@ -75,6 +77,7 @@ internal static class PackagedChatGPTLauncher
                     using (Process process = Process.GetProcessById((int)pid))
                     {
                         Thread.Sleep(500);
+                        if (args.Length == 3) VerifyActivatedExecutable(process, args[2]);
                         if (process.HasExited)
                             throw new InvalidOperationException("ChatGPT exited immediately after activation.");
                     }
@@ -105,10 +108,10 @@ internal static class PackagedChatGPTLauncher
         finally { Marshal.ReleaseComObject(manager); }
     }
 
-    private static string FindPackageFamily()
+    private static string FindPackageFamily(string expectedExecutable)
     {
-        const string script = "$p=@(Get-AppxPackage -Name 'OpenAI.Codex';Get-AppxPackage -Name 'OpenAI.ChatGPT-Desktop')|Sort-Object Version -Descending|Select-Object -First 1;if($p){[Console]::Out.Write($p.PackageFamilyName)}";
-        var start = new ProcessStartInfo("powershell.exe", "-NoLogo -NoProfile -NonInteractive -Command \"" + script + "\"")
+        const string script = "$p=@(Get-AppxPackage -Name 'OpenAI.Codex';Get-AppxPackage -Name 'OpenAI.ChatGPT-Desktop')|Sort-Object Version -Descending|Select-Object -First 1;if($p){[Console]::Out.Write($p.PackageFamilyName+'|'+$p.InstallLocation)}";
+        var start = new ProcessStartInfo(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System), "WindowsPowerShell", "v1.0", "powershell.exe"), "-NoLogo -NoProfile -NonInteractive -Command \"" + script + "\"")
         {
             UseShellExecute = false, RedirectStandardOutput = true,
             RedirectStandardError = true, CreateNoWindow = true
@@ -120,8 +123,23 @@ internal static class PackagedChatGPTLauncher
             process.WaitForExit();
             if (process.ExitCode != 0)
                 throw new InvalidOperationException("Cannot query ChatGPT package: " + errors.Trim());
-            return output.Length == 0 ? null : output;
+            if (output.Length == 0) return null;
+            string[] parts = output.Split('|');
+            if (parts.Length != 2) throw new InvalidOperationException("Invalid package discovery result.");
+            if (expectedExecutable != null && !Path.GetFullPath(Path.GetDirectoryName(Path.GetDirectoryName(expectedExecutable))).Equals(Path.GetFullPath(parts[1]), StringComparison.OrdinalIgnoreCase))
+                throw new InvalidOperationException("Package version changed before activation. Restart Launch Deck; enhanced rules were not broadened.");
+            return parts[0];
         }
+    }
+
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    private static extern bool QueryFullProcessImageName(IntPtr process, uint flags, StringBuilder path, ref uint count);
+    private static void VerifyActivatedExecutable(Process process, string expected)
+    {
+        var image = new StringBuilder(32768); uint count = (uint)image.Capacity;
+        if (!QueryFullProcessImageName(process.Handle, 0, image, ref count)
+            || !Path.GetFullPath(image.ToString()).Equals(Path.GetFullPath(expected), StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException("Activated package identity changed or could not be verified. Enhanced proxy must stop; the client was not terminated.");
     }
 
     private static void SaveEnvironment()
@@ -147,6 +165,7 @@ internal static class PackagedChatGPTLauncher
         {
             environment.SetValue("HTTP_PROXY", proxy, RegistryValueKind.String);
             environment.SetValue("HTTPS_PROXY", proxy, RegistryValueKind.String);
+            environment.SetValue("ALL_PROXY", proxy, RegistryValueKind.String);
             environment.SetValue("NO_PROXY", "localhost,127.0.0.1,::1", RegistryValueKind.String);
             environment.SetValue("NODE_USE_ENV_PROXY", "1", RegistryValueKind.String);
             environment.Flush();
@@ -164,7 +183,10 @@ internal static class PackagedChatGPTLauncher
                 {
                     foreach (string key in ProxyKeys)
                     {
-                        if (Convert.ToInt32(backup.GetValue(key + ".present", 0)) == 1)
+                        object present = backup.GetValue(key + ".present", null);
+                        // Older helpers did not back up ALL_PROXY; leave untracked values intact.
+                        if (present == null) continue;
+                        if (Convert.ToInt32(present) == 1)
                             environment.SetValue(key, backup.GetValue(key, null, RegistryValueOptions.DoNotExpandEnvironmentNames), backup.GetValueKind(key));
                         else
                             environment.DeleteValue(key, false);

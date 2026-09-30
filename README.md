@@ -193,3 +193,7 @@ powershell -ExecutionPolicy Bypass -File .\build.ps1
 ## License
 
 [MIT](LICENSE)
+
+## v2.4.0 enhanced process proxy
+
+The separate `LaunchDeck-Enhanced-win-x64.zip` contains the Windows C# launcher with an optional unified process proxy for the desktop client's TCP 443/WebSocket traffic. The Tauri installers retain the ordinary proxy environment fix; their UI does not yet include enhanced mode. Read [scope, installation, licenses and remaining stop validation](docs/process-proxy.md) before installing. Existing system proxy, TUN and autostart settings are not changed.

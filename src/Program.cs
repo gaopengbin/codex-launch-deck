@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Drawing;
@@ -25,6 +25,9 @@ namespace ChatGPTProxyLauncherLite
 
     internal sealed class LauncherForm : Form
     {
+        private readonly LaunchDeck.ProcessProxy.ProxyController processProxy = new LaunchDeck.ProcessProxy.ProxyController();
+        private readonly System.Windows.Forms.Timer processProxyHealth = new System.Windows.Forms.Timer { Interval = 1000 };
+        private readonly CheckBox processProxyCheckBox = new CheckBox { AutoSize = true, Text = "增强代理：界面 + 子会话 / Enhanced proxy" };
         private readonly TextBox hostBox = new TextBox { Text = "127.0.0.1" };
         private readonly NumericUpDown portBox = new NumericUpDown { Minimum = 1, Maximum = 65535, Value = 10808 };
         private readonly CheckBox themeCheckBox = new CheckBox { AutoSize = true };
@@ -54,8 +57,8 @@ namespace ChatGPTProxyLauncherLite
             Text = "ChatGPT Proxy Launcher";
             Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath);
             StartPosition = FormStartPosition.CenterScreen;
-            ClientSize = new Size(480, 500);
-            MinimumSize = new Size(496, 539);
+            ClientSize = new Size(480, 534);
+            MinimumSize = new Size(496, 573);
             MaximizeBox = false;
             FormBorderStyle = FormBorderStyle.FixedSingle;
             AutoScaleMode = AutoScaleMode.Dpi;
@@ -186,6 +189,18 @@ namespace ChatGPTProxyLauncherLite
             body.Controls.Add(restoreThemeButton);
             body.Controls.Add(statusPanel);
             body.Controls.Add(footnote);
+            foreach (Control control in body.Controls) if (control.Top >= 194) control.Top += 34;
+            processProxyCheckBox.Location = new Point(28, 194);
+            body.Controls.Add(processProxyCheckBox);
+            processProxyHealth.Tick += delegate { try { processProxy.PollHealth(); } catch (Exception ex) { processProxyCheckBox.Checked = false; SetStatus(ex.Message, false); } };
+            processProxyHealth.Start();
+            processProxyCheckBox.CheckedChanged += async delegate {
+                if (!processProxyCheckBox.Checked && processProxy.State == LaunchDeck.ProcessProxy.ProxyState.Ready) {
+                    try { await Task.Run(() => processProxy.Dispose()); SetStatus(L("增强代理已关闭；基础代理在客户端重启前仍保持", "Enhanced proxy stopped; basic client proxy stays until restart"), null); }
+                    catch (Exception ex) { SetStatus(ex.Message, false); }
+                }
+            };
+            FormClosing += delegate { processProxyHealth.Stop(); try { processProxy.Dispose(); } catch (Exception ex) { MessageBox.Show(ex.Message); } };
             Controls.Add(body);
             Controls.Add(header);
             AcceptButton = launchButton;
@@ -222,6 +237,7 @@ namespace ChatGPTProxyLauncherLite
         private async void LaunchButtonClick(object sender, EventArgs e)
         {
             launchButton.Enabled = false;
+            processProxyCheckBox.Enabled = false; hostBox.Enabled = false; portBox.Enabled = false;
             UseWaitCursor = true;
             try
             {
@@ -235,6 +251,18 @@ namespace ChatGPTProxyLauncherLite
                 if (IsDesktopAppRunning()) throw new Exception(L("ChatGPT 已在运行，请完全退出后再试。", "ChatGPT is already running. Fully quit it and try again."));
 
                 string proxyUrl = String.Format("http://{0}:{1}", host, port);
+                if (processProxyCheckBox.Checked)
+                {
+                    // Verify the protected, pinned bundle before requesting administrator approval.
+                    SetStatus(L("增强代理：等待引擎与驱动授权", "Enhanced proxy: waiting for engine and driver approval"), null);
+                    processProxy.Prepare();
+
+                    await Task.Run(() => processProxy.Start(new LaunchDeck.ProcessProxy.ProxyPlan {
+                        ExecutablePath = LaunchDeck.ProcessProxy.ProxyController.ResolveExecutable(), ProxyHost = host, ProxyPort = port,
+                        Process443Approved = true, DriverApproved = true
+                    }));
+                    SetStatus(L("增强代理已就绪", "Enhanced proxy ready"), true);
+                }
                 if (themeCheckBox.Checked)
                 {
                     ThemeItem selectedTheme = themeComboBox.SelectedItem as ThemeItem ?? CreateBundledTheme();
@@ -242,7 +270,7 @@ namespace ChatGPTProxyLauncherLite
                     if (themePath == null) throw new Exception(L("未找到 CodeDrobe 主题包。", "The CodeDrobe theme package was not found."));
 
                     SetStatus(L("正在通过 CodeDrobe 启动并应用主题…", "Starting Codex and applying the theme through CodeDrobe…"), null);
-                    StartPackagedChatGPT(proxyUrl, CodeDrobePort);
+                    StartPackagedChatGPT(proxyUrl, CodeDrobePort, processProxy.State == LaunchDeck.ProcessProxy.ProxyState.Ready ? processProxy.TargetExecutable : null);
                     bool cdpReady = await Task.Run(() => {
                         for (int attempt = 0; attempt < 50; attempt++) {
                             if (CanConnect("127.0.0.1", CodeDrobePort)) return true;
@@ -269,12 +297,13 @@ namespace ChatGPTProxyLauncherLite
                 else
                 {
                     SetStatus(L("正在查找 ChatGPT…", "Finding ChatGPT…"), null);
-                    StartPackagedChatGPT(proxyUrl, null);
+                    StartPackagedChatGPT(proxyUrl, null, processProxy.State == LaunchDeck.ProcessProxy.ProxyState.Ready ? processProxy.TargetExecutable : null);
                     SetStatus(L("已通过 " + proxyUrl + " 启动 ChatGPT", "ChatGPT started through " + proxyUrl), true);
                 }
             }
-            catch (Exception ex) { SetStatus(ex.Message, false); }
-            finally { UseWaitCursor = false; launchButton.Enabled = true; }
+            catch (OperationCanceledException ex) { processProxyCheckBox.Checked = false; SetStatus(ex.Message, null); }
+            catch (Exception ex) { string cleanup = ""; try { processProxy.Dispose(); } catch (Exception stopError) { cleanup = " " + stopError.Message; } SetStatus(ex.Message + cleanup, false); }
+            finally { UseWaitCursor = false; launchButton.Enabled = true; processProxyCheckBox.Enabled = true; hostBox.Enabled = true; portBox.Enabled = true; }
         }
 
         private async void RestoreThemeButtonClick(object sender, EventArgs e)
@@ -554,10 +583,12 @@ namespace ChatGPTProxyLauncherLite
 
         private static void ApplyProxyEnvironment(ProcessStartInfo info, string proxyUrl)
         {
-            foreach (string key in new[] { "HTTP_PROXY", "HTTPS_PROXY", "http_proxy", "https_proxy" })
+            foreach (string key in new[] { "HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "http_proxy", "https_proxy", "all_proxy" })
                 info.EnvironmentVariables[key] = proxyUrl;
             info.EnvironmentVariables["NO_PROXY"] = "localhost,127.0.0.1,::1";
             info.EnvironmentVariables["no_proxy"] = "localhost,127.0.0.1,::1";
+            // Match the desktop launcher: enable native fetch proxy support on supported Node versions.
+            info.EnvironmentVariables["NODE_USE_ENV_PROXY"] = "1";
         }
 
         private static string FindOnPath(string fileName)
@@ -622,12 +653,12 @@ namespace ChatGPTProxyLauncherLite
             finally { process.Dispose(); }
         }
 
-        private static void StartPackagedChatGPT(string proxyUrl, int? cdpPort)
+        private static void StartPackagedChatGPT(string proxyUrl, int? cdpPort, string expectedExecutable)
         {
             string helper = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "PackagedChatGPTLauncher.exe");
             if (!File.Exists(helper))
                 throw new FileNotFoundException("PackagedChatGPTLauncher.exe is missing.", helper);
-            string arguments = QuoteArgument(proxyUrl) + (cdpPort.HasValue ? " " + cdpPort.Value : "");
+            string arguments = QuoteArgument(proxyUrl) + (expectedExecutable != null ? " " + (cdpPort ?? 0) + " " + QuoteArgument(expectedExecutable) : (cdpPort.HasValue ? " " + cdpPort.Value : ""));
             var info = new ProcessStartInfo(helper, arguments)
             {
                 UseShellExecute = false,
