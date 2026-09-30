@@ -111,6 +111,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: Codex-Proxy-Launch-Deck-win-x64
+          retention-days: 14
           path: |
             desktop/src-tauri/target/release/bundle/nsis/*.exe
             desktop/src-tauri/target/release/bundle/nsis/*.zip
