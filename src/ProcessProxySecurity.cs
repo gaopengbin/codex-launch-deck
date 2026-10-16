@@ -93,6 +93,7 @@ namespace LaunchDeck.ProcessProxy
             if(GetPackagePathByFullName(fullName,ref count,value)!=0 || !Path.GetFullPath(value.ToString()).Equals(root,StringComparison.OrdinalIgnoreCase)) throw new InvalidOperationException("Package path changed.");
             RejectReparseAncestors(plan.ExecutablePath);
             if(!File.Exists(plan.ExecutablePath)) throw new InvalidOperationException("Package executable is missing.");
+            BrowserHelperScope.Verify(plan);
         }
         internal static void VerifyPeer(uint pid, string sid, string expectedHash)
         {

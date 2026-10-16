@@ -27,6 +27,7 @@ void *pidtbl_reserve(DWORD need)
 
 DWORD get_process_id_from_connection(UINT32 src_ip, UINT16 src_port)
 {
+    ld_metadata_context(4,src_port);
     // check cache first
     DWORD cached_pid = get_cached_pid(src_ip, src_port, FALSE);
     if (cached_pid != 0)
@@ -138,6 +139,7 @@ DWORD get_process_id_from_udp_connection(UINT32 src_ip, UINT16 src_port)
 
 DWORD get_process_id_from_connection_v6(const UINT8 src_ip6[16], UINT16 src_port)
 {
+    ld_metadata_context(6,src_port);
     DWORD size = 0, pid = 0;
 
     if (GetExtendedTcpTable(NULL, &size, FALSE, AF_INET6, TCP_TABLE_OWNER_PID_ALL, 0) != ERROR_INSUFFICIENT_BUFFER)
@@ -187,6 +189,7 @@ DWORD get_process_id_from_udp_connection_v6(const UINT8 src_ip6[16], UINT16 src_
 
 BOOL get_process_name_from_pid(DWORD pid, char *name, DWORD name_size)
 {
+    ld_metadata_pid(pid);
     HANDLE hProcess;
     WCHAR full_path_w[MAX_PATH];
     DWORD path_len = MAX_PATH;

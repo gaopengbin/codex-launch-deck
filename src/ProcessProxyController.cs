@@ -16,6 +16,24 @@ namespace LaunchDeck.ProcessProxy
         public string BundleId { get; set; }
         public System.Collections.Generic.Dictionary<string,string> Files { get; set; }
     }
+    internal static class PortableBundleVerifier
+    {
+        internal static void Verify(string directory)
+        {
+            ProxySecurity.VerifyProtectedDirectory(directory);
+            string manifestPath=Path.Combine(directory,"bundle-manifest.json");
+            ProxySecurity.VerifyProtectedFile(manifestPath);
+            var manifest=new JavaScriptSerializer().Deserialize<BrokerManifest>(File.ReadAllText(manifestPath));
+            if(manifest==null || manifest.BundleId!=NativeArtifacts.BundleId || manifest.Files==null) throw new InvalidOperationException("Approved bundle identity mismatch.");
+            foreach(string name in new[]{"ChatGPTProxyLauncher.exe","ProcessProxyHost.exe","PackagedChatGPTLauncher.exe"})
+            {
+                string expected;
+                if(!manifest.Files.TryGetValue(name,out expected)) throw new InvalidOperationException("Incomplete approved bundle.");
+                string path=Path.Combine(directory,name); ProxySecurity.VerifyProtectedFile(path); ProxySecurity.VerifyHash(path,expected);
+            }
+            NativePins.Verify(Path.Combine(directory,"process-proxy-native"));
+        }
+    }
     internal sealed class ProxyController : IDisposable
     {
         private readonly object gate=new object();
@@ -44,18 +62,7 @@ namespace LaunchDeck.ProcessProxy
             string directory=InstallDirectory;
             if(!Path.GetFullPath(AppDomain.CurrentDomain.BaseDirectory).TrimEnd('\\').Equals(directory,StringComparison.OrdinalIgnoreCase))
                 throw new InvalidOperationException("Enhanced proxy is waiting for the reviewed protected installation. Start the installed Launch Deck; no driver was loaded.");
-            ProxySecurity.VerifyProtectedDirectory(directory);
-            string manifestPath=Path.Combine(directory,"bundle-manifest.json");
-            ProxySecurity.VerifyProtectedFile(manifestPath);
-            var manifest=new JavaScriptSerializer().Deserialize<BrokerManifest>(File.ReadAllText(manifestPath));
-            if(manifest==null || manifest.BundleId!=NativeArtifacts.BundleId || manifest.Files==null) throw new InvalidOperationException("Approved bundle identity mismatch.");
-            foreach(string name in new[]{"ChatGPTProxyLauncher.exe","ProcessProxyHost.exe","PackagedChatGPTLauncher.exe"})
-            {
-                string expected;
-                if(!manifest.Files.TryGetValue(name,out expected)) throw new InvalidOperationException("Incomplete approved bundle.");
-                string path=Path.Combine(directory,name); ProxySecurity.VerifyProtectedFile(path); ProxySecurity.VerifyHash(path,expected);
-            }
-            NativePins.Verify(Path.Combine(directory,"process-proxy-native"));
+            PortableBundleVerifier.Verify(directory);
         }
         public static string ResolveExecutable()
         {

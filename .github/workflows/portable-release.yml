@@ -1,0 +1,49 @@
+name: Portable release verification
+
+on:
+  push:
+    tags:
+      - 'v*-portable'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  portable:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Verify proxy scope and lifecycle without a driver
+        shell: powershell
+        run: .\tests\test-process-proxy.ps1
+      - name: Verify native lifecycle without a driver
+        shell: powershell
+        run: .\tests\test-native-process-proxy.ps1
+      - name: Verify TLS forwarding without a driver
+        shell: powershell
+        run: .\tests\test-tls-proxy.ps1
+      - name: Verify browser configuration and launch policy
+        shell: powershell
+        run: |
+          .\tests\test-cua-forwarding.ps1
+          .\tests\test-browser-launch-policy.ps1
+      - name: Build enhanced components
+        shell: powershell
+        run: .\scripts\build-process-proxy.ps1
+      - name: Build and verify the single portable executable
+        shell: powershell
+        run: |
+          .\scripts\build-portable.ps1 -OutputDirectory output\portable-ci -NativePackage output\enhanced\package -NativeArtifactsSource output\enhanced\NativeArtifacts.generated.cs -Revision portable-ci
+          $p = Start-Process -FilePath output\portable-ci\LaunchDeck.exe -ArgumentList '--verify-payload' -Wait -PassThru
+          if ($p.ExitCode -ne 0) { throw 'Portable payload verification failed.' }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: LaunchDeck-portable-win-x64
+          retention-days: 3
+          path: |
+            output/portable-ci/LaunchDeck.exe
+            output/portable-ci/LaunchDeck.exe.sha256

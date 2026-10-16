@@ -13,10 +13,10 @@ class Tests
 {
     class Engine:IProxyEngine
     {
-        public List<string> Calls=new List<string>(); public bool FailStart,FailStop,FailRule,HangStart;
+        public List<string> Calls=new List<string>(); public bool FailStart,FailStop,FailRule,FailHelperRule,HangStart;
         public uint AddHttpProxy(string host,ushort port) { Calls.Add("proxy:"+host+":"+port); return 1; }
         public uint AddDirectLoopbackRule() { Calls.Add("loopback"); return 2; }
-        public uint AddProcess443Rule(string path,uint id) { Calls.Add("target:"+path); return FailRule?0u:3u; }
+        public uint AddProcess443Rule(string path,uint id) { Calls.Add("target:"+path); return FailRule || (FailHelperRule && path.EndsWith("node_repl.exe"))?0u:3u; }
         public void DeleteRule(uint id) { Calls.Add("delete"+id); }
         public void DeleteProxy(uint id) { Calls.Add("deleteproxy"); }
         public bool Start() { Calls.Add("start"); if(HangStart) new ManualResetEvent(false).WaitOne(); return !FailStart; }
@@ -66,6 +66,21 @@ class Tests
         }
         var controller=new ProxyController(); Check(controller.State==ProxyState.Off,"initial off"); Reject(()=>controller.Prepare(),"uninstalled bundle rejected before UAC"); Check(controller.State==ProxyState.WaitingApproval,"waiting approval state");
         var plan=Plan();Check(ProxyPlan.Parse(plan.Serialize()).ExecutablePath==plan.ExecutablePath,"serialization");
+        string helper=Path.Combine(BrowserHelperScope.RuntimeRoot,@"0123456789abcdef\bin\node_repl.exe");
+        plan.BrowserHelperPaths=new[]{helper};
+        Check(ProxyPlan.Parse(plan.Serialize()).BrowserHelperPaths[0]==helper,"helper plan round trip");
+        Check(plan.Matches(helper,IPAddress.Parse("203.0.113.1"),443,true),"exact browser helper routed");
+        Check(!plan.Matches(helper.Replace("node_repl.exe","node.exe"),IPAddress.Parse("203.0.113.1"),443,true),"general Node excluded");
+        Check(!plan.Matches(helper,IPAddress.Loopback,443,true),"helper loopback direct");
+        Check(!plan.Matches(helper,IPAddress.Parse("203.0.113.1"),80,true),"helper other ports excluded");
+        foreach(string invalid in new[]{@"C:\other\node_repl.exe",helper.Replace("node_repl.exe","node.exe"),helper.Replace("0123456789abcdef","*"),helper.Replace("bin\\node_repl.exe","bin\\..\\bin\\node_repl.exe")})
+            Reject(()=>BrowserHelperScope.ValidatePath(invalid),"helper path outside exact scope denied");
+        var helperEngine=new Engine();using(var helperSession=new ProxySession(helperEngine)){helperSession.Start(plan);Check(helperEngine.Calls.Contains("target:"+helper),"helper rule installed before engine start");}
+        var failedHelperEngine=new Engine{FailHelperRule=true};
+        Reject(()=>new ProxySession(failedHelperEngine).Start(plan),"helper rule failure rejects session");
+        Check(!failedHelperEngine.Calls.Contains("start") && failedHelperEngine.Calls.Contains("deleteproxy"),"helper failure cleans up before driver start");
+        Reject(()=>BrowserHelperScope.Verify(plan),"helper without package source rejected");
+        plan=Plan();
         foreach(string remote in new[]{"203.0.113.1","2001:db8::1"}) Check(plan.Matches(plan.ExecutablePath,IPAddress.Parse(remote),443,true),"TCP443 remote "+remote);
         foreach(string local in new[]{"127.0.0.1","127.2.3.4","::1","::ffff:127.0.0.1","0.0.0.0","::"}) Check(!plan.Matches(plan.ExecutablePath,IPAddress.Parse(local),443,true),"loopback/unspecified exclusion "+local);
         Check(!plan.Matches(plan.ExecutablePath,IPAddress.Parse("203.0.113.1"),80,true),"other port"); Check(!plan.Matches(plan.ExecutablePath,IPAddress.Parse("203.0.113.1"),443,false),"UDP excluded"); Check(!plan.Matches(@"C:\other\ChatGPT.exe",IPAddress.Parse("203.0.113.1"),443,true),"basename insufficient"); Check(!plan.Matches(plan.ExecutablePath.Replace("26.928.2636.0","26.928.2637.0"),IPAddress.Parse("203.0.113.1"),443,true),"package version exact");

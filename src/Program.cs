@@ -15,10 +15,11 @@ namespace ChatGPTProxyLauncherLite
     internal static class Program
     {
         [STAThread]
-        private static void Main()
+        private static void Main(string[] args)
         {
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
+            PortableRuntime.ReadArguments(args);
             Application.Run(new LauncherForm());
         }
     }
@@ -36,6 +37,7 @@ namespace ChatGPTProxyLauncherLite
         private readonly LinkLabel storeLink = new LinkLabel { AutoSize = true };
         private readonly Button launchButton = new Button { Height = 44 };
         private readonly Button restoreThemeButton = new Button { Height = 32 };
+        private readonly Button browserProxyButton = new Button { Height = 32 };
         private readonly Button languageButton = new Button { Height = 28, Width = 48 };
         private readonly Label headerDescription = new Label();
         private readonly Label hostLabel = new Label();
@@ -57,8 +59,8 @@ namespace ChatGPTProxyLauncherLite
             Text = "ChatGPT Proxy Launcher";
             Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath);
             StartPosition = FormStartPosition.CenterScreen;
-            ClientSize = new Size(480, 534);
-            MinimumSize = new Size(496, 573);
+            ClientSize = new Size(480, 598);
+            MinimumSize = new Size(496, 637);
             MaximizeBox = false;
             FormBorderStyle = FormBorderStyle.FixedSingle;
             AutoScaleMode = AutoScaleMode.Dpi;
@@ -190,6 +192,19 @@ namespace ChatGPTProxyLauncherLite
             body.Controls.Add(statusPanel);
             body.Controls.Add(footnote);
             foreach (Control control in body.Controls) if (control.Top >= 194) control.Top += 34;
+            browserProxyButton.Location = new Point(28, 328);
+            browserProxyButton.Size = new Size(424, 32);
+            browserProxyButton.FlatStyle = FlatStyle.Flat;
+            browserProxyButton.FlatAppearance.BorderColor = Color.FromArgb(203, 213, 225);
+            browserProxyButton.BackColor = Color.White;
+            browserProxyButton.Cursor = Cursors.Hand;
+            browserProxyButton.Click += delegate {
+                try { using (var dialog = new CuaProxyMaintenanceDialog(english)) dialog.ShowDialog(this); }
+                catch (Exception ex) { SetStatus(ex.Message, false); }
+            };
+            statusPanel.Top += 42;
+            footnote.Top += 42;
+            body.Controls.Add(browserProxyButton);
             processProxyCheckBox.Location = new Point(28, 194);
             body.Controls.Add(processProxyCheckBox);
             processProxyHealth.Tick += delegate { try { processProxy.PollHealth(); } catch (Exception ex) { processProxyCheckBox.Checked = false; SetStatus(ex.Message, false); } };
@@ -205,7 +220,26 @@ namespace ChatGPTProxyLauncherLite
             Controls.Add(header);
             AcceptButton = launchButton;
             ApplyLanguage();
-            Shown += async delegate { await RefreshThemesAsync(false); };
+            Shown += async delegate {
+                var resume = PortableRuntime.Resume;
+                if (resume != null) {
+                    hostBox.Text = resume.Host; portBox.Value = resume.Port;
+                    english = resume.English; ApplyLanguage();
+                    processProxyCheckBox.Checked = true; themeCheckBox.Checked = resume.Theme;
+                    if (resume.Theme) {
+                        await RefreshThemesAsync(false);
+                        foreach (ThemeItem item in themeComboBox.Items)
+                            if (item.Slug == resume.ThemeSlug) { themeComboBox.SelectedItem = item; break; }
+                    }
+                    LaunchButtonClick(this, EventArgs.Empty);
+                } else {
+                    // Reuse a listening local proxy instead of resetting this machine
+                    // to a port where no proxy is running.
+                    foreach (int candidate in new[] { 7890, 10808, 1080 })
+                        if (await Task.Run(() => CanConnect("127.0.0.1", candidate))) { portBox.Value = candidate; break; }
+                    await RefreshThemesAsync(false);
+                }
+            };
         }
 
         private string L(string chinese, string englishText)
@@ -228,8 +262,10 @@ namespace ChatGPTProxyLauncherLite
             storeLink.Text = L("浏览 CodeDrobe 主题商店", "Browse the CodeDrobe theme store");
             restoreThemeButton.Text = L("恢复 Codex 原生外观", "Restore native Codex appearance");
             footnote.Text = L(
-                "线上主题下载后会缓存到本机；代理仅应用于本次启动，不修改 Windows 系统代理。主题模式需要 Node.js / npx。",
-                "Store themes are cached locally. The proxy applies only to this launch and does not change the Windows system proxy. Theme mode requires Node.js / npx.");
+                "浏览器读取兼容策略随本次启动传入，不依赖修改工具配置。代理仅用于本次启动。主题模式需要 Node.js / npx。",
+                "Browser read compatibility is passed with this launch, without rewriting tool configuration. Themes require Node.js / npx.");
+            browserProxyButton.Text = L("检查 / 修复浏览器", "Check / repair browser");
+            browserProxyButton.AccessibleName = browserProxyButton.Text;
             RefreshThemeDisplayNames();
             SetStatus(L("准备就绪", "Ready"), null);
         }
@@ -237,6 +273,7 @@ namespace ChatGPTProxyLauncherLite
         private async void LaunchButtonClick(object sender, EventArgs e)
         {
             launchButton.Enabled = false;
+            browserProxyButton.Enabled = false;
             processProxyCheckBox.Enabled = false; hostBox.Enabled = false; portBox.Enabled = false;
             UseWaitCursor = true;
             try
@@ -253,14 +290,26 @@ namespace ChatGPTProxyLauncherLite
                 string proxyUrl = String.Format("http://{0}:{1}", host, port);
                 if (processProxyCheckBox.Checked)
                 {
+                    var selected = themeComboBox.SelectedItem as ThemeItem;
+                    SetStatus(L("正在准备增强代理组件…", "Preparing enhanced proxy components…"), null);
+                    var resumeSettings = new PortableResume {
+                        Host=host, Port=port, Theme=themeCheckBox.Checked,
+                        ThemeSlug=selected==null?null:selected.Slug, English=english
+                    };
+                    bool handedOff = await Task.Run(() => PortableRuntime.Handoff(resumeSettings));
+                    if (handedOff) { Close(); return; }
                     // Verify the protected, pinned bundle before requesting administrator approval.
                     SetStatus(L("增强代理：等待引擎与驱动授权", "Enhanced proxy: waiting for engine and driver approval"), null);
                     processProxy.Prepare();
 
-                    await Task.Run(() => processProxy.Start(new LaunchDeck.ProcessProxy.ProxyPlan {
-                        ExecutablePath = LaunchDeck.ProcessProxy.ProxyController.ResolveExecutable(), ProxyHost = host, ProxyPort = port,
-                        Process443Approved = true, DriverApproved = true
-                    }));
+                    await Task.Run(() => {
+                        string executable=LaunchDeck.ProcessProxy.ProxyController.ResolveExecutable();
+                        processProxy.Start(new LaunchDeck.ProcessProxy.ProxyPlan {
+                            ExecutablePath=executable,
+                            BrowserHelperPaths=LaunchDeck.ProcessProxy.BrowserHelperScope.Resolve(executable),
+                            ProxyHost=host, ProxyPort=port, Process443Approved=true, DriverApproved=true
+                        });
+                    });
                     SetStatus(L("增强代理已就绪", "Enhanced proxy ready"), true);
                 }
                 if (themeCheckBox.Checked)
@@ -303,7 +352,7 @@ namespace ChatGPTProxyLauncherLite
             }
             catch (OperationCanceledException ex) { processProxyCheckBox.Checked = false; SetStatus(ex.Message, null); }
             catch (Exception ex) { string cleanup = ""; try { processProxy.Dispose(); } catch (Exception stopError) { cleanup = " " + stopError.Message; } SetStatus(ex.Message + cleanup, false); }
-            finally { UseWaitCursor = false; launchButton.Enabled = true; processProxyCheckBox.Enabled = true; hostBox.Enabled = true; portBox.Enabled = true; }
+            finally { UseWaitCursor = false; browserProxyButton.Enabled = true; launchButton.Enabled = true; processProxyCheckBox.Enabled = true; hostBox.Enabled = true; portBox.Enabled = true; }
         }
 
         private async void RestoreThemeButtonClick(object sender, EventArgs e)

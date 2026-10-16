@@ -44,12 +44,15 @@ int http_connect_v6(SOCKET s, const UINT8 dest_ip6[16], UINT16 dest_port, const 
             host_part, dest_port, host_part, dest_port);
     }
 
-    if (send(s, request, len, 0) != len) return -1;
+    int ld_sent=send(s, request, len, 0);
+    if(ld_sent!=len) {ld_metadata_http_failure(ld_sent==SOCKET_ERROR?WSAGetLastError():0);return -1;}
 
     len = recv(s, response, sizeof(response) - 1, 0);
+    ld_metadata_http_failure(len==SOCKET_ERROR?WSAGetLastError():0);
     if (len <= 0 || len >= (int)sizeof(response)) return -1;
     response[len] = '\0';
     char *code_start = strchr(response, ' ');
+    ld_metadata_http_status(code_start?atoi(code_start+1):0);
     if (!code_start || atoi(code_start + 1) != 200) return -1;
     return 0;
 }
@@ -103,13 +106,15 @@ int http_connect(SOCKET s, UINT32 dest_ip, UINT16 dest_port, const PROXY_CONFIG 
             host_part, dest_port, host_part, dest_port);
     }
 
-    if (send(s, request, len, 0) != len)
-    {
+    int ld_sent=send(s, request, len, 0);
+    if(ld_sent!=len) {
+        ld_metadata_http_failure(ld_sent==SOCKET_ERROR?WSAGetLastError():0);
         log_message("HTTP: Failed to send CONNECT request");
         return -1;
     }
 
     len = recv(s, response, sizeof(response) - 1, 0);
+    ld_metadata_http_failure(len==SOCKET_ERROR?WSAGetLastError():0);
     if (len <= 0 || len >= (int)sizeof(response))
     {
         log_message("HTTP: Failed to receive response");
@@ -126,6 +131,7 @@ int http_connect(SOCKET s, UINT32 dest_ip, UINT16 dest_port, const PROXY_CONFIG 
 
     status_code = 0;
     char *code_start = strchr(status_line, ' ');
+    ld_metadata_http_status(code_start?atoi(code_start+1):0);
     if (code_start != NULL)
         status_code = atoi(code_start + 1);
 

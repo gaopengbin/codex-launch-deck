@@ -11,6 +11,7 @@ permissions:
 
 jobs:
   build:
+    if: ${{ !endsWith(github.ref_name, '-portable') }}
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -41,6 +42,10 @@ jobs:
       - name: Test native lifecycle and matching (no driver)
         shell: powershell
         run: .\tests\test-native-process-proxy.ps1
+
+      - name: Test TLS hostname forwarding (no driver)
+        shell: powershell
+        run: .\tests\test-tls-proxy.ps1
 
       - name: Build enhanced process proxy distribution
         shell: powershell

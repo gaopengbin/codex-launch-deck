@@ -3,10 +3,12 @@
 
 #include <windows.h>
 
+#ifndef PROXYBRIDGE_API
 #ifdef PROXYBRIDGE_EXPORTS
 #define PROXYBRIDGE_API __declspec(dllexport)
 #else
 #define PROXYBRIDGE_API __declspec(dllimport)
+#endif
 #endif
 
 #ifdef __cplusplus
@@ -17,6 +19,9 @@ extern "C" {
 
 typedef void (*LogCallback)(const char* message);
 typedef void (*ConnectionCallback)(const char* process_name, DWORD pid, const char* dest_ip, UINT16 dest_port, const char* proxy_info);
+// Numeric-only metadata; no destination, headers or payload cross this ABI.
+typedef void (*MetadataCallback)(UINT64 flow, DWORD pid, UINT32 family, UINT16 local_port, UINT32 rule, UINT32 proxy, UINT32 stage, int result, UINT32 error, UINT32 http_status);
+PROXYBRIDGE_API void ProxyBridge_ConfigureMetadata(MetadataCallback callback, const char *target, UINT32 rule, UINT32 proxy);
 
 typedef enum {
     PROXY_TYPE_HTTP = 0,

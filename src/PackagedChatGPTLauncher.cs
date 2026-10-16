@@ -14,7 +14,7 @@ internal static class PackagedChatGPTLauncher
 {
     private const string BackupPath = @"Software\GeoD\CodexProxyLaunchDeck\ProxyEnvBackup";
     private static readonly string[] ProxyKeys = {
-        "HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "NO_PROXY", "NODE_USE_ENV_PROXY"
+        "HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "NO_PROXY", "NODE_USE_ENV_PROXY", BrowserReadLaunchPolicy.EnvironmentKey
     };
 
     [ComImport, Guid("2E941141-7F97-4756-BA1D-9DECDE894A3D"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
@@ -168,6 +168,9 @@ internal static class PackagedChatGPTLauncher
             environment.SetValue("ALL_PROXY", proxy, RegistryValueKind.String);
             environment.SetValue("NO_PROXY", "localhost,127.0.0.1,::1", RegistryValueKind.String);
             environment.SetValue("NODE_USE_ENV_PROXY", "1", RegistryValueKind.String);
+            string existing = environment.GetValue(BrowserReadLaunchPolicy.EnvironmentKey, null, RegistryValueOptions.DoNotExpandEnvironmentNames) as string;
+            string inherited = Environment.GetEnvironmentVariable(BrowserReadLaunchPolicy.EnvironmentKey);
+            environment.SetValue(BrowserReadLaunchPolicy.EnvironmentKey, BrowserReadLaunchPolicy.Merge(existing, inherited), RegistryValueKind.String);
             environment.Flush();
         }
     }

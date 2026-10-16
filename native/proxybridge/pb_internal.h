@@ -8,6 +8,7 @@
 #include <winsock2.h>
 #include <windows.h>
 #include "ProxyBridge.h"
+#include "ld_metadata.h"
 #include <ws2tcpip.h>
 #include <mstcpip.h>
 #include <iphlpapi.h>
@@ -121,6 +122,9 @@ typedef struct {
     UINT32 proxy_config_id;
     BOOL   is_ipv6;
     UINT8  orig_dest_ip6[16];
+UINT64 metadata_flow;
+    DWORD metadata_pid;
+    UINT16 metadata_port;
 } CONNECTION_CONFIG;
 
 typedef struct {

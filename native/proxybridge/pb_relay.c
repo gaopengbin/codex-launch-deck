@@ -1,4 +1,5 @@
 #include "pb_internal.h"
+#include "pb_tls.h"
 
 // Relay: TCP/UDP relay servers and per-connection worker threads.
 
@@ -526,6 +527,8 @@ DWORD WINAPI local_proxy_server(LPVOID arg)
                     UINT16 client_port = ntohs(client_addr.sin_port);
                     if (get_connection_full(client_port, FALSE, &conn_config->orig_dest_ip, &conn_config->orig_dest_port, &conn_config->proxy_config_id) && client_addr.sin_addr.s_addr == conn_config->orig_dest_ip)
                     {
+                        conn_config->metadata_port=client_port;
+                        conn_config->metadata_flow=ld_metadata_lookup(conn_config->is_ipv6?6:4,client_port,conn_config->proxy_config_id,&conn_config->metadata_pid);
                         HANDLE conn_thread = CreateThread(NULL, 1, connection_handler, (LPVOID)conn_config, 0, NULL);
                         if (conn_thread != NULL) { CloseHandle(conn_thread); }
                         else { closesocket(client_sock); free(conn_config); }
@@ -553,6 +556,8 @@ DWORD WINAPI local_proxy_server(LPVOID arg)
                     UINT16 client_port = ntohs(client_addr6.sin6_port);
                     if (get_connection_full_v6(client_port, FALSE, conn_config->orig_dest_ip6, &conn_config->orig_dest_port, &conn_config->proxy_config_id) && memcmp(&client_addr6.sin6_addr, conn_config->orig_dest_ip6, 16) == 0)
                     {
+                        conn_config->metadata_port=client_port;
+                        conn_config->metadata_flow=ld_metadata_lookup(conn_config->is_ipv6?6:4,client_port,conn_config->proxy_config_id,&conn_config->metadata_pid);
                         HANDLE conn_thread = CreateThread(NULL, 1, connection_handler, (LPVOID)conn_config, 0, NULL);
                         if (conn_thread != NULL) { CloseHandle(conn_thread); }
                         else { closesocket(client_sock6); free(conn_config); }
@@ -585,6 +590,8 @@ DWORD WINAPI connection_handler(LPVOID arg)
     SOCKET socks_sock;
     struct sockaddr_in socks_addr;
 
+    UINT64 metadata_flow=config->metadata_flow;DWORD metadata_pid=config->metadata_pid;UINT16 metadata_port=config->metadata_port;UINT32 metadata_family=is_ipv6?6:4;
+    ld_metadata_emit(metadata_flow,metadata_pid,metadata_family,metadata_port,proxy_config_id,LD_META_ACCEPT,0,0,0);
     free(config);
 
     // Look up the proxy config for this connection
@@ -628,12 +635,14 @@ DWORD WINAPI connection_handler(LPVOID arg)
 
     if (connect(socks_sock, (struct sockaddr *)&socks_addr, sizeof(socks_addr)) == SOCKET_ERROR)
     {
+        ld_metadata_emit(metadata_flow,metadata_pid,metadata_family,metadata_port,proxy_config_id,LD_META_UPSTREAM,1,WSAGetLastError(),0);
         log_message("[RELAY] Failed to connect to proxy %s:%d (%d)", proxy->host, proxy->port, WSAGetLastError());
         closesocket(client_sock);
         closesocket(socks_sock);
         return 0;
     }
 
+    ld_metadata_emit(metadata_flow,metadata_pid,metadata_family,metadata_port,proxy_config_id,LD_META_UPSTREAM,0,0,0);
     if (proxy->type == PROXY_TYPE_SOCKS5)
     {
         int rc;
@@ -663,9 +672,20 @@ DWORD WINAPI connection_handler(LPVOID arg)
     }
     else if (proxy->type == PROXY_TYPE_HTTP)
     {
-        int rc = is_ipv6
-            ? http_connect_v6(socks_sock, dest_ip6, dest_port, proxy)
-            : http_connect(socks_sock, dest_ip, dest_port, proxy);
+        ld_metadata_http_reset();
+        char tls_host[254];
+        int rc;
+        if (proxy->send_domain_to_proxy && !proxy->username[0] && dest_port == 443 &&
+            ld_tls_peek_server_name(client_sock, tls_host, sizeof(tls_host), 1000) &&
+            ld_tls_is_openai_host(tls_host)) {
+            int status = 0; DWORD error = 0;
+            rc = ld_tls_http_connect(socks_sock, tls_host, dest_port, &status, &error);
+            ld_metadata_http_status(status); ld_metadata_http_failure(error);
+        } else {
+            rc = is_ipv6 ? http_connect_v6(socks_sock, dest_ip6, dest_port, proxy)
+                         : http_connect(socks_sock, dest_ip, dest_port, proxy);
+        }
+        ld_metadata_emit(metadata_flow,metadata_pid,metadata_family,metadata_port,proxy_config_id,LD_META_CONNECT,rc==0?0:1,ld_metadata_http_get_error(),ld_metadata_http_get_status());
         if (rc != 0)
         {
             closesocket(client_sock);
@@ -706,6 +726,7 @@ DWORD WINAPI connection_handler(LPVOID arg)
     // both transfer in current thread
     transfer_handler((LPVOID)transfer_config);
 
+    ld_metadata_emit(metadata_flow,metadata_pid,metadata_family,metadata_port,proxy_config_id,LD_META_CLOSE,0,0,0);
     // Sockets already closed in transfer_handler!
 
     return 0;

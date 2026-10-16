@@ -17,7 +17,11 @@ The host validates the full EXE path against the currently registered OpenAI Win
 
 WinDivert's packet filter observes TCP 443 and relay-port packets before process ownership and connection matching. Unmatched packets are reinjected unchanged. Other applications, loopback destinations, UDP and DNS are not redirected. The internal exclusive relay uses port 34010. Existing WinDivert/relay conflicts are refused rather than shared or taken over.
 
+For TLS connections to `chatgpt.com`, `openai.com`, `oaistatic.com` and `oaiusercontent.com` (including subdomains), enhanced mode reads the public ClientHello server name and sends that hostname in HTTP CONNECT. This avoids forwarding a poisoned local DNS address to the upstream. It peeks without consuming or changing TLS bytes, does not decrypt application traffic, and does not log hostnames. Split TCP reads and TLS records are supported. Missing, encrypted or invalid SNI, other domains and authenticated proxy configurations retain the existing IP forwarding path; the initial peek is bounded to one second and 64 KiB. The upstream remains responsible for its own DNS resolution.
+
 ## Stop, rollback and limits
+
+The portable browser repair also allows exact copied `node_repl.exe` paths under the current user's Codex runtime cache. Each file must match the helper shipped with the currently registered package; paths and hashes are checked again by the elevated host. These additional rules route remote TCP 443 only. General Node executables and unrelated applications are excluded. See [portable usage](portable.md).
 
 Uncheck enhanced mode or close its launcher to request host cleanup. Stopping can interrupt existing connections. A lost control pipe or failed native stop blocks new enhanced sessions; an owned host still running after the first wait remains observed rather than abandoned. Never force-kill another application's service or delete a driver to clear this state.
 
@@ -29,6 +33,6 @@ This fix addresses Launch Deck's proxy coverage for the desktop client. It does 
 
 ## Build and licensing
 
-Run `tests/test-process-proxy.ps1` and `tests/test-native-process-proxy.ps1` before `scripts/build-process-proxy.ps1`. Requirements: Windows x64, .NET Framework compiler, Microsoft C++ x64 tools and Python 3. Build output must be a fresh directory. Builds never load the production DLL/driver. Fixed dependency SHA256 values and driver certificate pins are checked; real hashes of the newly built native DLL are compiled into the launcher and host. The host pins the newly built launcher's hash.
+Run `tests/test-process-proxy.ps1`, `tests/test-native-process-proxy.ps1` and `tests/test-tls-proxy.ps1` before `scripts/build-process-proxy.ps1`. Requirements: Windows x64, .NET Framework compiler, Microsoft C++ x64 tools and Python 3. Build output must be a fresh directory. Builds never load the production DLL/driver. Fixed dependency SHA256 values and driver certificate pins are checked; real hashes of the newly built native DLL are compiled into the launcher and host. The host pins the newly built launcher's hash.
 
 The native MIT source is in `native/proxybridge`, forked from InterceptSuite/ProxyBridge commit `02703a0672a8b94011a4698368a392f7734c10dc`. The official WinDivert 2.2.2-A runtime is dynamically linked under its LGPLv3 option. Full licenses, modified ProxyBridge source and corresponding WinDivert v2.2.2 source accompany the Enhanced ZIP. To rebuild against a modified compatible LGPL library, rebuild the package/pins from source rather than replacing a protected runtime silently. Normal GitHub source archives contain the launcher, host, build scripts and tests.

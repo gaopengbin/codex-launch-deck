@@ -20,7 +20,7 @@ $unpacked=Join-Path $OutputRoot 'windivert';Expand-Archive -LiteralPath $binaryZ
 $wd=Join-Path $unpacked 'WinDivert-2.2.2-A'
 $compile=Join-Path $OutputRoot 'compile';New-Item -ItemType Directory $compile | Out-Null
 $core=Join-Path $repo 'native\proxybridge'
-$sources=@('ProxyBridge.c','pb_util.c','pb_process.c','pb_rules.c','pb_proxy.c','pb_dns.c','pb_socks5.c','pb_http.c','pb_conntrack.c','pb_relay.c') | ForEach-Object {Join-Path $core $_}
+$sources=@('ProxyBridge.c','pb_util.c','pb_process.c','pb_rules.c','pb_proxy.c','pb_dns.c','pb_socks5.c','pb_http.c','pb_conntrack.c','pb_relay.c','pb_metadata.c','pb_tls.c') | ForEach-Object {Join-Path $core $_}
 Push-Location $compile
 try{
  & cl.exe /nologo /utf-8 /O2 /MT /GS /guard:cf /W3 /D_CRT_SECURE_NO_WARNINGS /D_WINSOCK_DEPRECATED_NO_WARNINGS /DPROXYBRIDGE_EXPORTS /DNDEBUG "/I$wd\include" @sources /LD /link /DYNAMICBASE /HIGHENTROPYVA /NXCOMPAT /guard:cf /CETCOMPAT "/LIBPATH:$wd\x64" WinDivert.lib ws2_32.lib iphlpapi.lib "/OUT:$compile\ProxyBridge.dll"

@@ -619,6 +619,7 @@ RuleAction match_rule(const char *process_name, UINT32 dest_ip, UINT16 dest_port
     AcquireSRWLockShared(&g_rules_lock);
     RuleAction action = match_rule_inner(process_name, dest_ip, dest_port, is_udp, out_proxy_config_id);
     ReleaseSRWLockShared(&g_rules_lock);
+    ld_metadata_decision(process_name,dest_port,is_udp,action,out_proxy_config_id?*out_proxy_config_id:0);
     return action;
 }
 
@@ -708,6 +709,7 @@ RuleAction match_rule_v6(const char *process_name, const UINT8 dest_ip6[16], UIN
     AcquireSRWLockShared(&g_rules_lock);
     RuleAction action = match_rule_v6_inner(process_name, dest_ip6, dest_port, is_udp, out_proxy_config_id);
     ReleaseSRWLockShared(&g_rules_lock);
+    ld_metadata_decision(process_name,dest_port,is_udp,action,out_proxy_config_id?*out_proxy_config_id:0);
     return action;
 }
 

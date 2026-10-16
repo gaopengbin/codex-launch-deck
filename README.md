@@ -19,7 +19,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/gaopengbin/codex-launch-deck/releases/latest"><strong>下载 Windows 安装版</strong></a>
+  <a href="https://github.com/gaopengbin/codex-launch-deck/releases/latest"><strong>下载 Windows 免安装版</strong></a>
   &nbsp;·&nbsp;
   <a href="https://codedrobe.app">CodeDrobe 主题商店</a>
   &nbsp;·&nbsp;
@@ -29,6 +29,12 @@
 <p align="center">
   <img src="docs/images/theme-gallery.png" alt="Codex Proxy Launch Deck 主题商店" width="92%">
 </p>
+
+## v2.4.1 免安装修复版
+
+下载 [LaunchDeck.exe](https://github.com/gaopengbin/codex-launch-deck/releases/download/v2.4.1-portable/LaunchDeck.exe)，双击即可使用。此次修复新版 Codex 的内置浏览器读取、截图兼容与辅助程序代理遗漏问题；重启实测正文读取从约 21 秒降至 0.301 秒，截图降至 0.044 秒。
+
+**浏览器网络修复需要开启“增强代理”**。无需安装向导；首次准备受保护组件及启用驱动仍需 Windows 授权。不修改系统代理、DNS 或 FlClash。详见 [修复说明](docs/releases/v2.4.1-portable.md) 与 [免安装使用边界](docs/portable.md)。旧安装版仍可在历史 Release 中获取。
 
 ## 它解决什么
 

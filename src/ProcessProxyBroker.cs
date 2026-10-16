@@ -16,7 +16,8 @@ namespace LaunchDeck.ProcessProxy
                 string first=ProxyProtocol.ReadLine(reader);
                 if(first==null) return 0;
                 var plan=ProxyPlan.Parse(first);
-                validate(plan); // Production host always rechecks the registered protected package.
+                validate(plan);
+                diagnostic.RecordPlan(plan); // Production host always rechecks the registered protected package.
                 diagnostic.Record(DiagnosticStage.Approval,DiagnosticResult.Enter);
                 if(!approve(plan))
                 {

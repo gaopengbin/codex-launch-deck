@@ -13,6 +13,7 @@ namespace LaunchDeck.ProcessProxy
     {
         public const string Scope = "chatgpt-process-tcp-443";
         public string ExecutablePath { get; set; }
+        public string[] BrowserHelperPaths { get; set; }
         public string ProxyHost { get; set; }
         public int ProxyPort { get; set; }
         public bool Process443Approved { get; set; }
@@ -34,6 +35,10 @@ namespace LaunchDeck.ProcessProxy
                 || !full.StartsWith(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "WindowsApps", "OpenAI."), StringComparison.OrdinalIgnoreCase)
                 || !full.Equals(ExecutablePath, StringComparison.OrdinalIgnoreCase))
                 throw new ArgumentException("Only the resolved OpenAI Store package executable is allowed.");
+            if (BrowserHelperPaths != null) {
+                if (BrowserHelperPaths.Length > 8) throw new ArgumentException("Too many browser helpers.");
+                foreach (string helper in BrowserHelperPaths) BrowserHelperScope.ValidatePath(helper);
+            }
             IPAddress upstream;
             if (!IPAddress.TryParse(ProxyHost, out upstream) || !IsLoopback(upstream)
                 || ProxyPort < 1 || ProxyPort > 65535)
@@ -65,7 +70,55 @@ namespace LaunchDeck.ProcessProxy
             Validate();
             return tcp && port == 443 && destination != null && !IsLoopback(destination)
                 && !destination.Equals(IPAddress.Any) && !destination.Equals(IPAddress.IPv6Any)
-                && ExecutablePath.Equals(executable, StringComparison.OrdinalIgnoreCase);
+                && (ExecutablePath.Equals(executable, StringComparison.OrdinalIgnoreCase)
+                    || (BrowserHelperPaths ?? new string[0]).Contains(executable, StringComparer.OrdinalIgnoreCase));
+        }
+    }
+
+    internal static class BrowserHelperScope
+    {
+        internal static string RuntimeRoot { get { return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "OpenAI", "Codex", "runtimes", "cua_node"); } }
+        internal static void ValidatePath(string path)
+        {
+            if (String.IsNullOrEmpty(path) || path.Length >= 1024 || path.Any(c => c > 127)
+                || path.IndexOfAny(new[] {'*','?',';',',','\r','\n','\0'}) >= 0)
+                throw new ArgumentException("Invalid browser helper path.");
+            string full=Path.GetFullPath(path), root=Path.GetFullPath(RuntimeRoot)+"\\";
+            string relative=full.StartsWith(root,StringComparison.OrdinalIgnoreCase)?full.Substring(root.Length):"";
+            string[] parts=relative.Split('\\');
+            if (!full.Equals(path,StringComparison.OrdinalIgnoreCase) || parts.Length!=3
+                || parts[0].Length!=16 || !parts[0].All(Uri.IsHexDigit)
+                || parts[1]!="bin" || parts[2]!="node_repl.exe")
+                throw new ArgumentException("Only the copied Codex browser helper is allowed.");
+        }
+        internal static string Source(string executable) { return Path.Combine(Path.GetDirectoryName(executable),"resources","cua_node","bin","node_repl.exe"); }
+        internal static string[] Resolve(string executable)
+        {
+            string source=Source(executable);
+            if (!File.Exists(source) || !Directory.Exists(RuntimeRoot)) return new string[0];
+            string expected=ProxySecurity.HashFile(source);
+            var paths=new List<string>();
+            foreach(string directory in Directory.GetDirectories(RuntimeRoot)) {
+                string candidate=Path.Combine(directory,"bin","node_repl.exe");
+                if(!File.Exists(candidate)) continue;
+                ValidatePath(candidate);
+                ProxySecurity.RejectReparseAncestors(candidate);
+                if(ProxySecurity.HashFile(candidate)==expected) paths.Add(candidate);
+            }
+            if(paths.Count>8) throw new InvalidOperationException("Too many matching browser runtimes.");
+            return paths.ToArray();
+        }
+        internal static void Verify(ProxyPlan plan)
+        {
+            if(plan.BrowserHelperPaths==null || plan.BrowserHelperPaths.Length==0) return;
+            string source=Source(plan.ExecutablePath);
+            ProxySecurity.RejectReparseAncestors(source);
+            string expected=ProxySecurity.HashFile(source);
+            foreach(string path in plan.BrowserHelperPaths) {
+                ValidatePath(path);
+                ProxySecurity.RejectReparseAncestors(path);
+                ProxySecurity.VerifyHash(path,expected);
+            }
         }
     }
 
@@ -105,6 +158,11 @@ namespace LaunchDeck.ProcessProxy
                 uint target = engine.AddProcess443Rule(plan.ExecutablePath, proxy);
                 if (target == 0) throw new InvalidOperationException("Target rule failed.");
                 rules.Add(target);
+                foreach(string helper in plan.BrowserHelperPaths ?? new string[0]) {
+                    uint rule=engine.AddProcess443Rule(helper,proxy);
+                    if(rule==0) throw new InvalidOperationException("Browser helper rule failed.");
+                    rules.Add(rule);
+                }
                 engineMayBeRunning = true; // Even a partial Start must be rolled back.
                 if (!engine.Start()) throw new InvalidOperationException("The packet engine did not become ready.");
                 Ready = true;
@@ -181,9 +239,19 @@ namespace LaunchDeck.ProcessProxy
         private AddRule addRule;
         private IdOperation deleteRule, deleteProxy;
         private Operation start, stop;
+        private readonly ProxyDiagnostic diagnostic;
+        private uint metadataProxy,metadataDirect;
+        private bool metadataConfigured;
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+        private delegate void MetadataCallback(ulong flow,uint pid,uint family,ushort port,uint rule,uint proxy,uint stage,int result,uint error,uint status);
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+        private delegate void ConfigureMetadata(MetadataCallback callback,[MarshalAs(UnmanagedType.LPStr)] string target,uint rule,uint proxy);
+        private ConfigureMetadata configureMetadata;
+        private static MetadataCallback rootedMetadata; // Dedicated host owns one engine; root until process exit.
 
-        public NativeEngine(string directory)
+        public NativeEngine(string directory,ProxyDiagnostic diagnostic=null)
         {
+            this.diagnostic=diagnostic;
             directory = Path.GetFullPath(directory);
             // Pin files open against replacement while verifying and using the native engine.
             try
@@ -203,6 +271,7 @@ namespace LaunchDeck.ProcessProxy
                 stop = Bind<Operation>("ProxyBridge_Stop");
                 Bind<BoolOption>("ProxyBridge_SetLocalhostViaProxy")(0);
                 Bind<BoolOption>("ProxyBridge_SetTrafficLoggingEnabled")(0);
+                if(diagnostic!=null) configureMetadata=Bind<ConfigureMetadata>("ProxyBridge_ConfigureMetadata");
             }
             catch { Dispose(); throw; }
         }
@@ -212,9 +281,12 @@ namespace LaunchDeck.ProcessProxy
             if (pointer == IntPtr.Zero) throw new InvalidOperationException("Native API mismatch.");
             return Marshal.GetDelegateForFunctionPointer(pointer, typeof(T)) as T;
         }
-        public uint AddHttpProxy(string host, ushort port) { return addProxy(0, host, port, IntPtr.Zero, IntPtr.Zero, 0); }
-        public uint AddDirectLoopbackRule() { return addRule("*", "127.0.0.0-127.255.255.255;::1;::ffff:127.0.0.0/104", "*", IntPtr.Zero, 2, 1, 0); }
-        public uint AddProcess443Rule(string path, uint proxy) { return addRule(path, "*", "443", IntPtr.Zero, 0, 0, proxy); }
+        // Resolve OpenAI TLS destinations through the upstream using the original
+        // ClientHello name, rather than forwarding a possibly poisoned local IP.
+        public uint AddHttpProxy(string host, ushort port) { return metadataProxy=addProxy(0, host, port, IntPtr.Zero, IntPtr.Zero, 1); }
+        public uint AddDirectLoopbackRule() { return metadataDirect=addRule("*", "127.0.0.0-127.255.255.255;::1;::ffff:127.0.0.0/104", "*", IntPtr.Zero, 2, 1, 0); }
+        public uint AddProcess443Rule(string path, uint proxy) { uint rule=addRule(path, "*", "443", IntPtr.Zero, 0, 0, proxy);
+            if(rule!=0 && diagnostic!=null && !metadataConfigured) { rootedMetadata=diagnostic.QueueMetadata;configureMetadata(rootedMetadata,path,rule,proxy);diagnostic.RecordRules(metadataProxy,metadataDirect,rule);metadataConfigured=true; } return rule; }
         public void DeleteRule(uint id) { if (deleteRule(id) == 0) throw new InvalidOperationException("Cannot remove rule."); }
         public void DeleteProxy(uint id) { if (deleteProxy(id) == 0) throw new InvalidOperationException("Cannot remove proxy."); }
         public bool Start() { startAttempted = true; mayBeRunning = true; return start() != 0; }
