@@ -10,8 +10,47 @@ using System.Web.Script.Serialization;
 
 namespace ChatGPTProxyLauncherLite
 {
-    // User-requested maintenance and bounded launcher startup checks. No continuous
-    // watcher, permission change, runtime-code patch or process termination.
+    // The application regenerates plugin configuration after startup and updates.
+    // Reapply only missing proxy forwarding keys; every write uses the existing
+    // version, path, backup, byte-preservation and concurrent-write checks.
+    internal sealed class CuaProxyForwardingWatch : IDisposable
+    {
+        private readonly object gate=new object();
+        private readonly Action reconcile;
+        private readonly System.Threading.Timer timer;
+        private bool disposed;
+        internal string LastError { get; private set; }
+        internal CuaProxyForwardingWatch(Action action, int intervalMs=2000)
+        {
+            reconcile=action;
+            timer=new System.Threading.Timer(_=>ReconcileOnce(),null,System.Threading.Timeout.Infinite,intervalMs);
+            ReconcileOnce();
+            timer.Change(intervalMs,intervalMs);
+        }
+        internal static CuaProxyForwardingWatch CreateDefault()
+        {
+            var maintenance=CuaProxyForwardingMaintenance.CreateDefault();
+            return new CuaProxyForwardingWatch(()=> {
+                var state=maintenance.Check();
+                if(state.Missing.Length>0) maintenance.Repair(state);
+            });
+        }
+        internal void ReconcileOnce()
+        {
+            if(!System.Threading.Monitor.TryEnter(gate)) return;
+            try {
+                if(disposed) return;
+                try {reconcile(); LastError=null;}
+                catch(Exception error) {LastError=error.GetType().Name+": "+error.Message;}
+            } finally {System.Threading.Monitor.Exit(gate);}
+        }
+        public void Dispose()
+        {
+            lock(gate) {disposed=true; timer.Dispose();}
+        }
+    }
+    // Validated configuration maintenance, shared by manual repair and the
+    // forwarding watcher. No permission change, runtime-code patch or termination.
     internal sealed class CuaProxyForwardingMaintenance
     {
         internal sealed class Inspection

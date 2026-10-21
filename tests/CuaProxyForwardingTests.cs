@@ -74,7 +74,7 @@ class CuaProxyForwardingTests
             f = new Fixture(root); result = f.Service.Repair(f.Service.Check()); byte[] beforeRollbackFailure = File.ReadAllBytes(f.Config); f.Service.ReplaceFile = (a,b,c) => { throw new IOException("simulated rollback failure"); }; Reject(() => f.Service.Rollback(result.RecordPath), "rollback write failure reported"); Assert(beforeRollbackFailure.SequenceEqual(File.ReadAllBytes(f.Config)), "failed rollback preserves repaired file");
             f = new Fixture(root); string originalDirectory = Path.GetDirectoryName(f.Config), redirected = Path.Combine(f.Root,"redirected"); Directory.Move(originalDirectory,redirected);
             var junction = new System.Diagnostics.ProcessStartInfo(Path.Combine(Environment.SystemDirectory,"cmd.exe"), "/d /c mklink /J \""+originalDirectory+"\" \""+redirected+"\"") {UseShellExecute=false,CreateNoWindow=true,RedirectStandardOutput=true,RedirectStandardError=true};
-            using(var p=System.Diagnostics.Process.Start(junction)){p.StandardOutput.ReadToEnd();p.StandardError.ReadToEnd();p.WaitForExit();if(p.ExitCode!=0)throw new Exception("Fixture junction creation failed.");}
+            using(var p=System.Diagnostics.Process.Start(junction)){string stdout=p.StandardOutput.ReadToEnd(),stderr=p.StandardError.ReadToEnd();p.WaitForExit();if(p.ExitCode!=0)throw new Exception("Fixture junction creation failed: "+stdout+stderr);}
             Reject(() => f.Service.Check(), "redirected plugin directory refused");
             // A second cached version must not influence selection of authoritative marketplace version.
             f = new Fixture(root); Directory.CreateDirectory(Path.Combine(f.Home, "plugins", "cache", "openai-bundled", "unified-computer-use", "99.0.0")); Assert(f.Service.Check().Version == "26.930.61225", "cached newest version not guessed");
@@ -99,6 +99,21 @@ class CuaProxyForwardingTests
             Reject(()=>f.Service.RepairBrowserRead(snap), "stale browser repair snapshot refused");
             f = new Fixture(root); f.Edit("\"CUA_REPL_NODE_REPL_PATH\":", "\"BROWSER_USE_TINYSKY_ENABLED\":\"1\",\"CUA_REPL_NODE_REPL_PATH\":");
             Reject(()=>f.Service.RepairBrowserRead(f.Service.Check()), "production runtime verifier refuses fixture binaries");
+            f=new Fixture(root);
+            var watched=f;
+            using(var watch=new CuaProxyForwardingWatch(()=>{var state=watched.Service.Check();if(state.Missing.Length>0) watched.Service.Repair(state);},600000)) {
+                Assert(f.Service.Check().Missing.Length==0,"launch reconciles proxy forwarding");
+                var regenerated=new Fixture(root); watched=regenerated;
+                watch.ReconcileOnce();
+                Assert(regenerated.Service.Check().Missing.Length==0,"regenerated configuration reconciled");
+                var before=File.ReadAllBytes(regenerated.Config); watch.ReconcileOnce();
+                Assert(before.SequenceEqual(File.ReadAllBytes(regenerated.Config)),"healthy configuration left byte exact");
+            }
+            int attempts=0;
+            var stopped=new CuaProxyForwardingWatch(()=>{attempts++;},600000);
+            stopped.Dispose(); stopped.ReconcileOnce(); Assert(attempts==1,"closed launcher stops reconciliation");
+            using(var watch=new CuaProxyForwardingWatch(()=>{throw new IOException("fixture unavailable");},600000))
+                Assert(watch.LastError!=null,"failed reconciliation reported without claiming success");
             Console.WriteLine("PASS " + checks + " checks. Fixtures retained: " + root); return 0;
         }
         catch (Exception error) { Console.Error.WriteLine(error); Console.Error.WriteLine("Fixtures retained: " + root); return 1; }

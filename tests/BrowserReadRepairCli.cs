@@ -12,6 +12,9 @@ internal static class BrowserReadRepairCli
                 var result=maintenance.RepairBrowserRead(inspection);
                 Console.WriteLine("Changed="+result.Changed+" Backup="+result.RecordPath);
                 Console.WriteLine(maintenance.Check().Summary);
+            } else if(args.Length==1 && args[0]=="proxy") {
+                var result=maintenance.Repair(inspection);
+                Console.WriteLine("Changed="+result.Changed+" Backup="+result.RecordPath);
             } else if(args.Length!=0) return 2;
             return 0;
         } catch(Exception error) { Console.Error.WriteLine(error.Message); return 1; }

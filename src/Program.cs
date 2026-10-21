@@ -1,14 +1,11 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.Diagnostics;
 using System.Drawing;
 using System.IO;
 using System.Linq;
 using System.Net.Sockets;
-using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
-using System.Web.Script.Serialization;
 
 namespace ChatGPTProxyLauncherLite
 {
@@ -27,16 +24,12 @@ namespace ChatGPTProxyLauncherLite
     internal sealed class LauncherForm : Form
     {
         private readonly LaunchDeck.ProcessProxy.ProxyController processProxy = new LaunchDeck.ProcessProxy.ProxyController();
+        private CuaProxyForwardingWatch browserForwardingWatch;
+        private string lastBrowserForwardingError;
         private readonly System.Windows.Forms.Timer processProxyHealth = new System.Windows.Forms.Timer { Interval = 1000 };
-        private readonly CheckBox processProxyCheckBox = new CheckBox { AutoSize = true, Text = "增强代理：界面 + 子会话 / Enhanced proxy" };
         private readonly TextBox hostBox = new TextBox { Text = "127.0.0.1" };
         private readonly NumericUpDown portBox = new NumericUpDown { Minimum = 1, Maximum = 65535, Value = 10808 };
-        private readonly CheckBox themeCheckBox = new CheckBox { AutoSize = true };
-        private readonly ComboBox themeComboBox = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList };
-        private readonly Button refreshThemesButton = new Button { Height = 30 };
-        private readonly LinkLabel storeLink = new LinkLabel { AutoSize = true };
         private readonly Button launchButton = new Button { Height = 44 };
-        private readonly Button restoreThemeButton = new Button { Height = 32 };
         private readonly Button browserProxyButton = new Button { Height = 32 };
         private readonly Button languageButton = new Button { Height = 28, Width = 48 };
         private readonly Label headerDescription = new Label();
@@ -46,21 +39,28 @@ namespace ChatGPTProxyLauncherLite
         private readonly Label statusLabel = new Label { AutoSize = false, TextAlign = ContentAlignment.MiddleLeft };
         private readonly Label statusMark = new Label { AutoSize = false, Text = "●", TextAlign = ContentAlignment.MiddleCenter };
         private readonly Panel statusPanel = new Panel();
-        private Process themeWatcher;
-        private string themeWatcherError = "";
-        private bool loadingThemes;
         private bool english;
+        private readonly NotifyIcon sessionTray = new NotifyIcon();
+        private bool explicitExit;
+        private bool trayNoticeShown;
 
-        private const int CodeDrobePort = 9335;
-        private const string ThemeFileName = "miku-future-beats-1.2.3.codedrobe-theme";
 
         public LauncherForm()
         {
             Text = "ChatGPT Proxy Launcher";
             Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath);
+            sessionTray.Icon = Icon;
+            sessionTray.Text = "LaunchDeck";
+            sessionTray.DoubleClick += delegate { RestoreFromTray(); };
+            var trayMenu = new ContextMenuStrip();
+            var openTrayItem = trayMenu.Items.Add("打开启动器 / Open launcher");
+            openTrayItem.Click += delegate { RestoreFromTray(); };
+            var exitTrayItem = trayMenu.Items.Add("退出并停止增强代理 / Exit and stop enhanced proxy");
+            exitTrayItem.Click += delegate { explicitExit = true; Close(); };
+            sessionTray.ContextMenuStrip = trayMenu;
             StartPosition = FormStartPosition.CenterScreen;
-            ClientSize = new Size(480, 598);
-            MinimumSize = new Size(496, 637);
+            ClientSize = new Size(480, 458);
+            MinimumSize = new Size(496, 497);
             MaximizeBox = false;
             FormBorderStyle = FormBorderStyle.FixedSingle;
             AutoScaleMode = AutoScaleMode.Dpi;
@@ -119,34 +119,7 @@ namespace ChatGPTProxyLauncherLite
             fields.Controls.Add(hostBox, 0, 1);
             fields.Controls.Add(portBox, 1, 1);
 
-            themeCheckBox.Location = new Point(28, 102);
-            themeCheckBox.Checked = FindThemePackage() != null;
-            themeCheckBox.CheckedChanged += delegate { themeComboBox.Enabled = themeCheckBox.Checked; };
-
-            themeComboBox.Location = new Point(28, 130);
-            themeComboBox.Size = new Size(302, 30);
-            themeComboBox.DisplayMember = "DisplayName";
-            themeComboBox.Items.Add(CreateBundledTheme());
-            themeComboBox.SelectedIndex = 0;
-            themeComboBox.Enabled = themeCheckBox.Checked;
-
-            refreshThemesButton.Location = new Point(340, 129);
-            refreshThemesButton.Size = new Size(112, 30);
-            refreshThemesButton.FlatStyle = FlatStyle.Flat;
-            refreshThemesButton.FlatAppearance.BorderColor = Color.FromArgb(148, 163, 184);
-            refreshThemesButton.BackColor = Color.White;
-            refreshThemesButton.Cursor = Cursors.Hand;
-            refreshThemesButton.Click += async delegate { await RefreshThemesAsync(true); };
-
-            storeLink.Location = new Point(28, 166);
-            storeLink.LinkColor = Color.FromArgb(14, 116, 144);
-            storeLink.ActiveLinkColor = Color.FromArgb(8, 145, 178);
-            storeLink.LinkClicked += delegate
-            {
-                Process.Start(new ProcessStartInfo("https://codedrobe.app/themes") { UseShellExecute = true });
-            };
-
-            launchButton.Location = new Point(28, 194);
+            launchButton.Location = new Point(28, 104);
             launchButton.Size = new Size(424, 44);
             launchButton.BackColor = Color.FromArgb(23, 23, 23);
             launchButton.ForeColor = Color.White;
@@ -157,15 +130,7 @@ namespace ChatGPTProxyLauncherLite
             launchButton.Cursor = Cursors.Hand;
             launchButton.Click += LaunchButtonClick;
 
-            restoreThemeButton.Location = new Point(28, 250);
-            restoreThemeButton.Size = new Size(424, 32);
-            restoreThemeButton.FlatStyle = FlatStyle.Flat;
-            restoreThemeButton.FlatAppearance.BorderColor = Color.FromArgb(203, 213, 225);
-            restoreThemeButton.BackColor = Color.White;
-            restoreThemeButton.Cursor = Cursors.Hand;
-            restoreThemeButton.Click += RestoreThemeButtonClick;
-
-            statusPanel.Location = new Point(28, 294);
+            statusPanel.Location = new Point(28, 204);
             statusPanel.Size = new Size(424, 48);
             statusPanel.BackColor = Color.White;
             statusPanel.BorderStyle = BorderStyle.FixedSingle;
@@ -180,19 +145,13 @@ namespace ChatGPTProxyLauncherLite
 
             footnote.ForeColor = Color.FromArgb(100, 116, 139);
             footnote.Font = new Font("Segoe UI", 9F);
-            footnote.Location = new Point(29, 354);
+            footnote.Location = new Point(29, 264);
             footnote.Size = new Size(423, 48);
             body.Controls.Add(fields);
-            body.Controls.Add(themeCheckBox);
-            body.Controls.Add(themeComboBox);
-            body.Controls.Add(refreshThemesButton);
-            body.Controls.Add(storeLink);
             body.Controls.Add(launchButton);
-            body.Controls.Add(restoreThemeButton);
             body.Controls.Add(statusPanel);
             body.Controls.Add(footnote);
-            foreach (Control control in body.Controls) if (control.Top >= 194) control.Top += 34;
-            browserProxyButton.Location = new Point(28, 328);
+            browserProxyButton.Location = new Point(28, 160);
             browserProxyButton.Size = new Size(424, 32);
             browserProxyButton.FlatStyle = FlatStyle.Flat;
             browserProxyButton.FlatAppearance.BorderColor = Color.FromArgb(203, 213, 225);
@@ -202,20 +161,39 @@ namespace ChatGPTProxyLauncherLite
                 try { using (var dialog = new CuaProxyMaintenanceDialog(english)) dialog.ShowDialog(this); }
                 catch (Exception ex) { SetStatus(ex.Message, false); }
             };
-            statusPanel.Top += 42;
-            footnote.Top += 42;
             body.Controls.Add(browserProxyButton);
-            processProxyCheckBox.Location = new Point(28, 194);
-            body.Controls.Add(processProxyCheckBox);
-            processProxyHealth.Tick += delegate { try { processProxy.PollHealth(); } catch (Exception ex) { processProxyCheckBox.Checked = false; SetStatus(ex.Message, false); } };
-            processProxyHealth.Start();
-            processProxyCheckBox.CheckedChanged += async delegate {
-                if (!processProxyCheckBox.Checked && processProxy.State == LaunchDeck.ProcessProxy.ProxyState.Ready) {
-                    try { await Task.Run(() => processProxy.Dispose()); SetStatus(L("增强代理已关闭；基础代理在客户端重启前仍保持", "Enhanced proxy stopped; basic client proxy stays until restart"), null); }
-                    catch (Exception ex) { SetStatus(ex.Message, false); }
+            processProxyHealth.Tick += delegate {
+                try { processProxy.PollHealth(); }
+                catch (Exception ex) { SetStatus(ex.Message, false); return; }
+                string error=browserForwardingWatch==null?null:browserForwardingWatch.LastError;
+                if(error!=lastBrowserForwardingError) {
+                    if(error!=null) SetStatus(L("浏览器代理配置检查失败：", "Browser proxy configuration check failed: ")+error,false);
+                    else if(lastBrowserForwardingError!=null) SetStatus(L("浏览器代理配置已恢复；已运行的工具可能需要重新连接", "Browser proxy configuration restored; existing tools may need reconnecting"),null);
+                    lastBrowserForwardingError=error;
                 }
             };
-            FormClosing += delegate { processProxyHealth.Stop(); try { processProxy.Dispose(); } catch (Exception ex) { MessageBox.Show(ex.Message); } };
+            processProxyHealth.Start();
+            FormClosing += delegate(object sender, FormClosingEventArgs e) {
+                // Closing the window must not silently cut an active client's network.
+                // Windows shutdown and the explicit tray exit still perform cleanup.
+                if(e.CloseReason == CloseReason.UserClosing && !explicitExit &&
+                    processProxy.State == LaunchDeck.ProcessProxy.ProxyState.Ready) {
+                    e.Cancel = true;
+                    sessionTray.Visible = true;
+                    Hide();
+                    if(!trayNoticeShown) {
+                        trayNoticeShown = true;
+                        sessionTray.ShowBalloonTip(4000, "LaunchDeck",
+                            L("增强代理继续运行。双击托盘图标打开；右键可退出并停止代理。",
+                              "Enhanced proxy remains active. Double-click to open; right-click to exit and stop it."), ToolTipIcon.Info);
+                    }
+                    return;
+                }
+                processProxyHealth.Stop();
+                if(browserForwardingWatch!=null) browserForwardingWatch.Dispose();
+                try { processProxy.Dispose(); } catch (Exception ex) { MessageBox.Show(ex.Message); }
+            };
+            FormClosed += delegate { sessionTray.Dispose(); trayMenu.Dispose(); };
             Controls.Add(body);
             Controls.Add(header);
             AcceptButton = launchButton;
@@ -225,19 +203,12 @@ namespace ChatGPTProxyLauncherLite
                 if (resume != null) {
                     hostBox.Text = resume.Host; portBox.Value = resume.Port;
                     english = resume.English; ApplyLanguage();
-                    processProxyCheckBox.Checked = true; themeCheckBox.Checked = resume.Theme;
-                    if (resume.Theme) {
-                        await RefreshThemesAsync(false);
-                        foreach (ThemeItem item in themeComboBox.Items)
-                            if (item.Slug == resume.ThemeSlug) { themeComboBox.SelectedItem = item; break; }
-                    }
                     LaunchButtonClick(this, EventArgs.Empty);
                 } else {
                     // Reuse a listening local proxy instead of resetting this machine
                     // to a port where no proxy is running.
                     foreach (int candidate in new[] { 7890, 10808, 1080 })
                         if (await Task.Run(() => CanConnect("127.0.0.1", candidate))) { portBox.Value = candidate; break; }
-                    await RefreshThemesAsync(false);
                 }
             };
         }
@@ -256,25 +227,20 @@ namespace ChatGPTProxyLauncherLite
                 "Proxy ChatGPT / Codex without enabling a global proxy");
             hostLabel.Text = L("代理主机", "Proxy host");
             portLabel.Text = L("HTTP / Mixed 端口", "HTTP / Mixed port");
-            launchButton.Text = L("通过代理启动 ChatGPT", "Launch ChatGPT through proxy");
-            themeCheckBox.Text = L("启用主题（CodeDrobe）", "Enable theme (CodeDrobe)");
-            refreshThemesButton.Text = L("刷新商店", "Refresh store");
-            storeLink.Text = L("浏览 CodeDrobe 主题商店", "Browse the CodeDrobe theme store");
-            restoreThemeButton.Text = L("恢复 Codex 原生外观", "Restore native Codex appearance");
+            launchButton.Text = L("启动 ChatGPT / Codex", "Launch ChatGPT / Codex");
             footnote.Text = L(
-                "浏览器读取兼容策略随本次启动传入，不依赖修改工具配置。代理仅用于本次启动。主题模式需要 Node.js / npx。",
-                "Browser read compatibility is passed with this launch, without rewriting tool configuration. Themes require Node.js / npx.");
+                "默认启用增强代理。关闭窗口将收至托盘继续运行；右键托盘图标可退出并停止代理。",
+                "Enhanced proxy is always enabled. Closing keeps it in the tray; right-click the tray icon to exit and stop it.");
             browserProxyButton.Text = L("检查 / 修复浏览器", "Check / repair browser");
             browserProxyButton.AccessibleName = browserProxyButton.Text;
-            RefreshThemeDisplayNames();
-            SetStatus(L("准备就绪", "Ready"), null);
+            SetStatus(L("准备就绪 · 增强代理默认启用", "Ready · Enhanced proxy enabled"), null);
         }
 
         private async void LaunchButtonClick(object sender, EventArgs e)
         {
             launchButton.Enabled = false;
             browserProxyButton.Enabled = false;
-            processProxyCheckBox.Enabled = false; hostBox.Enabled = false; portBox.Enabled = false;
+            hostBox.Enabled = false; portBox.Enabled = false;
             UseWaitCursor = true;
             try
             {
@@ -288,13 +254,10 @@ namespace ChatGPTProxyLauncherLite
                 if (IsDesktopAppRunning()) throw new Exception(L("ChatGPT 已在运行，请完全退出后再试。", "ChatGPT is already running. Fully quit it and try again."));
 
                 string proxyUrl = String.Format("http://{0}:{1}", host, port);
-                if (processProxyCheckBox.Checked)
                 {
-                    var selected = themeComboBox.SelectedItem as ThemeItem;
                     SetStatus(L("正在准备增强代理组件…", "Preparing enhanced proxy components…"), null);
                     var resumeSettings = new PortableResume {
-                        Host=host, Port=port, Theme=themeCheckBox.Checked,
-                        ThemeSlug=selected==null?null:selected.Slug, English=english
+                        Host=host, Port=port, English=english
                     };
                     bool handedOff = await Task.Run(() => PortableRuntime.Handoff(resumeSettings));
                     if (handedOff) { Close(); return; }
@@ -307,76 +270,32 @@ namespace ChatGPTProxyLauncherLite
                         processProxy.Start(new LaunchDeck.ProcessProxy.ProxyPlan {
                             ExecutablePath=executable,
                             BrowserHelperPaths=LaunchDeck.ProcessProxy.BrowserHelperScope.Resolve(executable),
+                            CoreHelperPaths=LaunchDeck.ProcessProxy.CoreHelperScope.Resolve(executable),
                             ProxyHost=host, ProxyPort=port, Process443Approved=true, DriverApproved=true
                         });
                     });
                     SetStatus(L("增强代理已就绪", "Enhanced proxy ready"), true);
                 }
-                if (themeCheckBox.Checked)
-                {
-                    ThemeItem selectedTheme = themeComboBox.SelectedItem as ThemeItem ?? CreateBundledTheme();
-                    string themePath = await ResolveThemePackageAsync(selectedTheme, proxyUrl);
-                    if (themePath == null) throw new Exception(L("未找到 CodeDrobe 主题包。", "The CodeDrobe theme package was not found."));
-
-                    SetStatus(L("正在通过 CodeDrobe 启动并应用主题…", "Starting Codex and applying the theme through CodeDrobe…"), null);
-                    StartPackagedChatGPT(proxyUrl, CodeDrobePort, processProxy.State == LaunchDeck.ProcessProxy.ProxyState.Ready ? processProxy.TargetExecutable : null);
-                    bool cdpReady = await Task.Run(() => {
-                        for (int attempt = 0; attempt < 50; attempt++) {
-                            if (CanConnect("127.0.0.1", CodeDrobePort)) return true;
-                            Thread.Sleep(300);
-                        }
-                        return false;
-                    });
-                    if (!cdpReady) throw new InvalidOperationException("ChatGPT started, but its theme debugging port did not open.");
-                    string applyArguments =
-                        "apply --app codex --port " + CodeDrobePort +
-                        " --theme " + QuoteArgument(themePath) + " --no-launch";
-                    CodeDrobeResult apply = await RunCodeDrobeAsync(applyArguments, proxyUrl);
-                    if (apply.ExitCode != 0) throw new Exception(GetCodeDrobeError(apply));
-
-                    themeWatcher = StartCodeDrobe(
-                        applyArguments + " --watch",
-                        proxyUrl,
-                        true);
-
-                    SetStatus(String.Format(
-                        L("已通过代理启动 Codex，并应用主题：{0}", "Codex started through the proxy with theme: {0}"),
-                        selectedTheme.DisplayName), true);
-                }
-                else
+                if(browserForwardingWatch==null) browserForwardingWatch=CuaProxyForwardingWatch.CreateDefault();
                 {
                     SetStatus(L("正在查找 ChatGPT…", "Finding ChatGPT…"), null);
                     StartPackagedChatGPT(proxyUrl, null, processProxy.State == LaunchDeck.ProcessProxy.ProxyState.Ready ? processProxy.TargetExecutable : null);
                     SetStatus(L("已通过 " + proxyUrl + " 启动 ChatGPT", "ChatGPT started through " + proxyUrl), true);
                 }
             }
-            catch (OperationCanceledException ex) { processProxyCheckBox.Checked = false; SetStatus(ex.Message, null); }
-            catch (Exception ex) { string cleanup = ""; try { processProxy.Dispose(); } catch (Exception stopError) { cleanup = " " + stopError.Message; } SetStatus(ex.Message + cleanup, false); }
-            finally { UseWaitCursor = false; browserProxyButton.Enabled = true; launchButton.Enabled = true; processProxyCheckBox.Enabled = true; hostBox.Enabled = true; portBox.Enabled = true; }
-        }
-
-        private async void RestoreThemeButtonClick(object sender, EventArgs e)
-        {
-            restoreThemeButton.Enabled = false;
-            UseWaitCursor = true;
-            try
-            {
-                if (IsDesktopAppRunning())
-                {
-                    throw new Exception(L(
-                        "请先完全退出 Codex，再恢复原生外观。",
-                        "Fully quit Codex before restoring its native appearance."));
+            catch (Exception ex) {
+                // Keep an approved session for its live client, including when
+                // Launch is pressed again while that client is already running.
+                bool keepProxy=false;
+                try { keepProxy=processProxy.State==LaunchDeck.ProcessProxy.ProxyState.Ready && IsDesktopAppRunning(); } catch { }
+                if(keepProxy) SetStatus(L("客户端已启动，增强代理保持运行；后续步骤失败：", "Client started; enhanced proxy remains active. A later step failed: ")+ex.Message,false);
+                else {
+                    string cleanup="";
+                    try { processProxy.Dispose(); } catch(Exception stopError) { cleanup=" "+stopError.Message; }
+                    SetStatus(ex.Message+cleanup,ex is OperationCanceledException?(bool?)null:false);
                 }
-
-                SetStatus(L("正在恢复 Codex 原生外观…", "Restoring the native Codex appearance…"), null);
-                CodeDrobeResult result = await RunCodeDrobeAsync(
-                    "restore --app codex --port " + CodeDrobePort,
-                    null);
-                if (result.ExitCode != 0) throw new Exception(GetCodeDrobeError(result));
-                SetStatus(L("已恢复 Codex 原生外观", "Native Codex appearance restored"), true);
             }
-            catch (Exception ex) { SetStatus(ex.Message, false); }
-            finally { UseWaitCursor = false; restoreThemeButton.Enabled = true; }
+            finally { UseWaitCursor = false; browserProxyButton.Enabled = true; launchButton.Enabled = true; hostBox.Enabled = true; portBox.Enabled = true; }
         }
 
         private void SetStatus(string text, bool? success)
@@ -385,165 +304,6 @@ namespace ChatGPTProxyLauncherLite
             statusLabel.ForeColor = success == true ? Color.FromArgb(21, 128, 61) : success == false ? Color.FromArgb(185, 28, 28) : Color.FromArgb(71, 85, 105);
             statusMark.ForeColor = statusLabel.ForeColor;
             statusPanel.BackColor = success == true ? Color.FromArgb(240, 253, 244) : success == false ? Color.FromArgb(254, 242, 242) : Color.White;
-        }
-
-        private async Task RefreshThemesAsync(bool userInitiated)
-        {
-            if (loadingThemes) return;
-            loadingThemes = true;
-            refreshThemesButton.Enabled = false;
-            if (userInitiated) SetStatus(L("正在加载主题商店…", "Loading the theme store…"), null);
-
-            try
-            {
-                string proxyUrl = String.IsNullOrWhiteSpace(hostBox.Text)
-                    ? null
-                    : String.Format("http://{0}:{1}", hostBox.Text.Trim(), (int)portBox.Value);
-                CodeDrobeResult result = await RunCodeDrobeAsync(
-                    "theme search --app codex --limit 100 --json",
-                    proxyUrl);
-                if (result.ExitCode != 0) throw new Exception(GetCodeDrobeError(result));
-
-                List<ThemeItem> storeThemes = ParseStoreThemes(result.StandardOutput);
-                string selectedSlug = (themeComboBox.SelectedItem as ThemeItem ?? CreateBundledTheme()).Slug;
-                ThemeItem bundled = CreateBundledTheme();
-
-                themeComboBox.BeginUpdate();
-                themeComboBox.Items.Clear();
-                themeComboBox.Items.Add(bundled);
-                foreach (ThemeItem item in storeThemes.Where(item => item.Slug != bundled.Slug))
-                    themeComboBox.Items.Add(item);
-                RefreshThemeDisplayNames();
-
-                ThemeItem selected = themeComboBox.Items.Cast<ThemeItem>().FirstOrDefault(item => item.Slug == selectedSlug);
-                themeComboBox.SelectedItem = selected ?? bundled;
-                themeComboBox.EndUpdate();
-
-                SetStatus(String.Format(
-                    L("主题商店已加载：{0} 个线上主题", "Theme store loaded: {0} online themes"),
-                    storeThemes.Count), true);
-            }
-            catch (Exception ex)
-            {
-                if (userInitiated)
-                    SetStatus(ex.Message, false);
-                else
-                    SetStatus(L("主题商店暂时不可用，仍可使用内置初音主题", "The theme store is unavailable; the bundled Miku theme is still available"), null);
-            }
-            finally
-            {
-                refreshThemesButton.Enabled = true;
-                loadingThemes = false;
-            }
-        }
-
-        private async Task<string> ResolveThemePackageAsync(ThemeItem theme, string proxyUrl)
-        {
-            if (theme.Bundled) return FindThemePackage();
-
-            string cacheDirectory = Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                "ChatGPTProxyLauncher",
-                "themes");
-            Directory.CreateDirectory(cacheDirectory);
-            string fileName = SafeFilePart(theme.Slug) + "-" + SafeFilePart(theme.Version) + ".codedrobe-theme";
-            string themePath = Path.Combine(cacheDirectory, fileName);
-            if (File.Exists(themePath)) return themePath;
-
-            SetStatus(String.Format(
-                L("正在下载主题：{0}", "Downloading theme: {0}"),
-                theme.DisplayName), null);
-            CodeDrobeResult result = await RunCodeDrobeAsync(
-                "theme download " + QuoteArgument(theme.Slug) +
-                " --output " + QuoteArgument(themePath) +
-                " --json",
-                proxyUrl);
-            if (result.ExitCode != 0)
-            {
-                if (File.Exists(themePath)) File.Delete(themePath);
-                throw new Exception(GetCodeDrobeError(result));
-            }
-            if (!File.Exists(themePath)) throw new Exception(L("主题下载完成，但未找到主题文件。", "The theme download completed, but its package was not found."));
-            return themePath;
-        }
-
-        private void RefreshThemeDisplayNames()
-        {
-            foreach (ThemeItem item in themeComboBox.Items)
-                item.DisplayName = item.GetDisplayName(english);
-            themeComboBox.DisplayMember = "";
-            themeComboBox.DisplayMember = "DisplayName";
-            themeComboBox.Refresh();
-        }
-
-        private static List<ThemeItem> ParseStoreThemes(string json)
-        {
-            var serializer = new JavaScriptSerializer();
-            var root = serializer.DeserializeObject(json) as Dictionary<string, object>;
-            object themesValue;
-            object[] rows;
-            if (root == null || !root.TryGetValue("themes", out themesValue) || (rows = themesValue as object[]) == null)
-                throw new Exception("CodeDrobe returned an invalid theme catalog.");
-
-            var themes = new List<ThemeItem>();
-            foreach (object rowValue in rows)
-            {
-                var row = rowValue as Dictionary<string, object>;
-                if (row == null) continue;
-                var names = GetDictionary(row, "name");
-                string slug = GetString(row, "slug");
-                string version = GetString(row, "version");
-                if (String.IsNullOrWhiteSpace(slug) || String.IsNullOrWhiteSpace(version)) continue;
-
-                var item = new ThemeItem
-                {
-                    Slug = slug,
-                    Version = version,
-                    NameZh = GetString(names, "zh"),
-                    NameEn = GetString(names, "en"),
-                    Author = GetString(row, "author")
-                };
-                item.DisplayName = item.GetDisplayName(false);
-                themes.Add(item);
-            }
-            return themes;
-        }
-
-        private static Dictionary<string, object> GetDictionary(Dictionary<string, object> source, string key)
-        {
-            object value;
-            return source != null && source.TryGetValue(key, out value)
-                ? value as Dictionary<string, object>
-                : null;
-        }
-
-        private static string GetString(Dictionary<string, object> source, string key)
-        {
-            object value;
-            return source != null && source.TryGetValue(key, out value) && value != null
-                ? Convert.ToString(value)
-                : "";
-        }
-
-        private static string SafeFilePart(string value)
-        {
-            char[] invalid = Path.GetInvalidFileNameChars();
-            return new string(value.Select(character => invalid.Contains(character) ? '_' : character).ToArray());
-        }
-
-        private static ThemeItem CreateBundledTheme()
-        {
-            var item = new ThemeItem
-            {
-                Slug = "miku-future-beats",
-                Version = "1.2.3",
-                NameZh = "初音未来 · Future Beats（内置）",
-                NameEn = "Hatsune Miku · Future Beats (bundled)",
-                Author = "local",
-                Bundled = true
-            };
-            item.DisplayName = item.NameZh;
-            return item;
         }
 
         private static bool CanConnect(string host, int port)
@@ -561,132 +321,17 @@ namespace ChatGPTProxyLauncherLite
             }
         }
 
-        private Process StartCodeDrobe(string arguments, string proxyUrl, bool captureErrors)
-        {
-            ProcessStartInfo info = CreateCodeDrobeStartInfo(arguments);
-            if (proxyUrl != null) ApplyProxyEnvironment(info, proxyUrl);
-            info.RedirectStandardOutput = captureErrors;
-            info.RedirectStandardError = captureErrors;
-
-            Process process = new Process { StartInfo = info, EnableRaisingEvents = true };
-            if (captureErrors)
-            {
-                themeWatcherError = "";
-                process.OutputDataReceived += delegate(object sender, DataReceivedEventArgs e)
-                {
-                    if (!String.IsNullOrWhiteSpace(e.Data)) themeWatcherError = e.Data;
-                };
-                process.ErrorDataReceived += delegate(object sender, DataReceivedEventArgs e)
-                {
-                    if (!String.IsNullOrWhiteSpace(e.Data)) themeWatcherError = e.Data;
-                };
-            }
-
-            if (!process.Start()) throw new Exception(L("无法启动 CodeDrobe。", "Could not start CodeDrobe."));
-            if (captureErrors)
-            {
-                process.BeginOutputReadLine();
-                process.BeginErrorReadLine();
-            }
-            return process;
-        }
-
-        private async Task<CodeDrobeResult> RunCodeDrobeAsync(string arguments, string proxyUrl)
-        {
-            ProcessStartInfo info = CreateCodeDrobeStartInfo(arguments);
-            if (proxyUrl != null) ApplyProxyEnvironment(info, proxyUrl);
-            info.RedirectStandardOutput = true;
-            info.RedirectStandardError = true;
-
-            using (Process process = Process.Start(info))
-            {
-                if (process == null) throw new Exception(L("无法启动 CodeDrobe。", "Could not start CodeDrobe."));
-                Task<string> standardOutput = process.StandardOutput.ReadToEndAsync();
-                Task<string> standardError = process.StandardError.ReadToEndAsync();
-                await Task.Run(() => process.WaitForExit());
-                return new CodeDrobeResult(process.ExitCode, await standardOutput, await standardError);
-            }
-        }
-
-        private static ProcessStartInfo CreateCodeDrobeStartInfo(string arguments)
-        {
-            string runner = FindOnPath("codedrobe.cmd");
-            string runnerArguments = arguments;
-            if (runner == null)
-            {
-                runner = FindOnPath("npx.cmd");
-                if (runner == null)
-                {
-                    throw new Exception("CodeDrobe requires Node.js / npx. Install Node.js or install @codedrobe/core globally.");
-                }
-                runnerArguments = "--yes @codedrobe/core@latest " + arguments;
-            }
-
-            string commandLine = "/d /s /c \"\"" + runner + "\" " + runnerArguments + "\"";
-            return new ProcessStartInfo("cmd.exe", commandLine)
-            {
-                UseShellExecute = false,
-                CreateNoWindow = true
-            };
-        }
-
-        private static void ApplyProxyEnvironment(ProcessStartInfo info, string proxyUrl)
-        {
-            foreach (string key in new[] { "HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "http_proxy", "https_proxy", "all_proxy" })
-                info.EnvironmentVariables[key] = proxyUrl;
-            info.EnvironmentVariables["NO_PROXY"] = "localhost,127.0.0.1,::1";
-            info.EnvironmentVariables["no_proxy"] = "localhost,127.0.0.1,::1";
-            // Match the desktop launcher: enable native fetch proxy support on supported Node versions.
-            info.EnvironmentVariables["NODE_USE_ENV_PROXY"] = "1";
-        }
-
-        private static string FindOnPath(string fileName)
-        {
-            string path = Environment.GetEnvironmentVariable("PATH") ?? "";
-            foreach (string directory in path.Split(Path.PathSeparator))
-            {
-                if (String.IsNullOrWhiteSpace(directory)) continue;
-                try
-                {
-                    string candidate = Path.Combine(directory.Trim(), fileName);
-                    if (File.Exists(candidate)) return candidate;
-                }
-                catch { }
-            }
-            return null;
-        }
-
-        private static string FindThemePackage()
-        {
-            string baseDirectory = AppDomain.CurrentDomain.BaseDirectory;
-            string parentDirectory = Directory.GetParent(baseDirectory.TrimEnd(Path.DirectorySeparatorChar)) == null
-                ? null
-                : Directory.GetParent(baseDirectory.TrimEnd(Path.DirectorySeparatorChar)).FullName;
-            string[] candidates =
-            {
-                Path.Combine(baseDirectory, "themes", ThemeFileName),
-                Path.Combine(baseDirectory, ThemeFileName),
-                parentDirectory == null ? "" : Path.Combine(parentDirectory, "themes", ThemeFileName)
-            };
-            return candidates.FirstOrDefault(File.Exists);
-        }
-
         private static string QuoteArgument(string value)
         {
             return "\"" + value.Replace("\"", "\\\"") + "\"";
         }
 
-        private string GetCodeDrobeError(CodeDrobeResult result)
+        private void RestoreFromTray()
         {
-            string message = String.IsNullOrWhiteSpace(result.StandardError)
-                ? result.StandardOutput
-                : result.StandardError;
-            string[] lines = (message ?? "").Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
-            string codedrobeMessage = lines.LastOrDefault(line => line.TrimStart().StartsWith("[codedrobe]", StringComparison.OrdinalIgnoreCase));
-            if (!String.IsNullOrWhiteSpace(codedrobeMessage)) return codedrobeMessage.Trim();
-            return lines.Length == 0
-                ? L("CodeDrobe 操作失败。", "CodeDrobe operation failed.")
-                : lines[lines.Length - 1];
+            Show();
+            WindowState = FormWindowState.Normal;
+            Activate();
+            sessionTray.Visible = false;
         }
 
         private static bool IsDesktopAppRunning()
@@ -725,39 +370,5 @@ namespace ChatGPTProxyLauncherLite
             }
         }
 
-        private sealed class CodeDrobeResult
-        {
-            public readonly int ExitCode;
-            public readonly string StandardOutput;
-            public readonly string StandardError;
-
-            public CodeDrobeResult(int exitCode, string standardOutput, string standardError)
-            {
-                ExitCode = exitCode;
-                StandardOutput = standardOutput;
-                StandardError = standardError;
-            }
-        }
-
-        private sealed class ThemeItem
-        {
-            public string Slug { get; set; }
-            public string Version { get; set; }
-            public string NameZh { get; set; }
-            public string NameEn { get; set; }
-            public string Author { get; set; }
-            public string DisplayName { get; set; }
-            public bool Bundled { get; set; }
-
-            public string GetDisplayName(bool english)
-            {
-                string name = english ? NameEn : NameZh;
-                if (String.IsNullOrWhiteSpace(name)) name = english ? NameZh : NameEn;
-                if (String.IsNullOrWhiteSpace(name)) name = Slug;
-                return Bundled || String.IsNullOrWhiteSpace(Author)
-                    ? name
-                    : name + "  ·  " + Author;
-            }
-        }
     }
 }

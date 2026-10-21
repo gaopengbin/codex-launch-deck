@@ -14,7 +14,7 @@ internal static class PackagedChatGPTLauncher
 {
     private const string BackupPath = @"Software\GeoD\CodexProxyLaunchDeck\ProxyEnvBackup";
     private static readonly string[] ProxyKeys = {
-        "HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "NO_PROXY", "NODE_USE_ENV_PROXY", BrowserReadLaunchPolicy.EnvironmentKey
+        "HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "WS_PROXY", "WSS_PROXY", "NO_PROXY", "NODE_USE_ENV_PROXY", BrowserReadLaunchPolicy.EnvironmentKey
     };
 
     [ComImport, Guid("2E941141-7F97-4756-BA1D-9DECDE894A3D"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
@@ -57,12 +57,14 @@ internal static class PackagedChatGPTLauncher
                 try
                 {
                     RestorePreviousEnvironment();
-                    string family = FindPackageFamily(args.Length == 3 ? args[2] : null);
+                    string installedExecutable;
+                    string family = FindPackageFamily(args.Length == 3 ? args[2] : null, out installedExecutable);
                     if (family == null)
                         throw new InvalidOperationException("ChatGPT/Codex Store package is not installed.");
 
                     SaveEnvironment();
                     uint pid;
+                    DateTime activationStarted=DateTime.UtcNow;
                     try
                     {
                         SetProxyEnvironment(args[0]);
@@ -74,14 +76,11 @@ internal static class PackagedChatGPTLauncher
                     }
                     if (pid == 0)
                         throw new InvalidOperationException("Windows did not return an application process ID.");
-                    using (Process process = Process.GetProcessById((int)pid))
-                    {
-                        Thread.Sleep(500);
-                        if (args.Length == 3) VerifyActivatedExecutable(process, args[2]);
-                        if (process.HasExited)
-                            throw new InvalidOperationException("ChatGPT exited immediately after activation.");
-                    }
-                    Console.WriteLine(pid);
+                    // Store activation can return a short-lived forwarding process.
+                    // Verify the resulting main window, not the departed broker PID.
+                    int confirmed=ActivationProcessResolver.Wait(installedExecutable,activationStarted,ReadActivationCandidates,
+                        ()=>Thread.Sleep(200),()=>DateTime.UtcNow,TimeSpan.FromSeconds(10));
+                    Console.WriteLine(confirmed);
                 }
                 finally { mutex.ReleaseMutex(); }
             }
@@ -108,8 +107,9 @@ internal static class PackagedChatGPTLauncher
         finally { Marshal.ReleaseComObject(manager); }
     }
 
-    private static string FindPackageFamily(string expectedExecutable)
+    private static string FindPackageFamily(string expectedExecutable, out string installedExecutable)
     {
+        installedExecutable=null;
         const string script = "$p=@(Get-AppxPackage -Name 'OpenAI.Codex';Get-AppxPackage -Name 'OpenAI.ChatGPT-Desktop')|Sort-Object Version -Descending|Select-Object -First 1;if($p){[Console]::Out.Write($p.PackageFamilyName+'|'+$p.InstallLocation)}";
         var start = new ProcessStartInfo(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System), "WindowsPowerShell", "v1.0", "powershell.exe"), "-NoLogo -NoProfile -NonInteractive -Command \"" + script + "\"")
         {
@@ -128,6 +128,12 @@ internal static class PackagedChatGPTLauncher
             if (parts.Length != 2) throw new InvalidOperationException("Invalid package discovery result.");
             if (expectedExecutable != null && !Path.GetFullPath(Path.GetDirectoryName(Path.GetDirectoryName(expectedExecutable))).Equals(Path.GetFullPath(parts[1]), StringComparison.OrdinalIgnoreCase))
                 throw new InvalidOperationException("Package version changed before activation. Restart Launch Deck; enhanced rules were not broadened.");
+            foreach(string name in new[]{"ChatGPT.exe","Codex.exe"}) {
+                string candidate=Path.Combine(parts[1],"app",name);
+                if(File.Exists(candidate)){installedExecutable=Path.GetFullPath(candidate);break;}
+            }
+            if(installedExecutable==null || (expectedExecutable!=null && !installedExecutable.Equals(expectedExecutable,StringComparison.OrdinalIgnoreCase)))
+                throw new InvalidOperationException("Registered package executable could not be verified.");
             return parts[0];
         }
     }
@@ -140,6 +146,19 @@ internal static class PackagedChatGPTLauncher
         if (!QueryFullProcessImageName(process.Handle, 0, image, ref count)
             || !Path.GetFullPath(image.ToString()).Equals(Path.GetFullPath(expected), StringComparison.OrdinalIgnoreCase))
             throw new InvalidOperationException("Activated package identity changed or could not be verified. Enhanced proxy must stop; the client was not terminated.");
+    }
+
+    private static System.Collections.Generic.IEnumerable<ActivationCandidate> ReadActivationCandidates(string executable)
+    {
+        var result=new System.Collections.Generic.List<ActivationCandidate>();
+        foreach(var process in Process.GetProcessesByName(Path.GetFileNameWithoutExtension(executable))) {
+            using(process) try {
+                if(process.HasExited || process.MainWindowHandle==IntPtr.Zero) continue;
+                VerifyActivatedExecutable(process,executable);
+                result.Add(new ActivationCandidate { Id=process.Id,Executable=executable,StartedUtc=process.StartTime.ToUniversalTime(),HasWindow=true });
+            } catch(InvalidOperationException) { } catch(System.ComponentModel.Win32Exception) { }
+        }
+        return result;
     }
 
     private static void SaveEnvironment()
@@ -166,6 +185,8 @@ internal static class PackagedChatGPTLauncher
             environment.SetValue("HTTP_PROXY", proxy, RegistryValueKind.String);
             environment.SetValue("HTTPS_PROXY", proxy, RegistryValueKind.String);
             environment.SetValue("ALL_PROXY", proxy, RegistryValueKind.String);
+            environment.SetValue("WS_PROXY", proxy, RegistryValueKind.String);
+            environment.SetValue("WSS_PROXY", proxy, RegistryValueKind.String);
             environment.SetValue("NO_PROXY", "localhost,127.0.0.1,::1", RegistryValueKind.String);
             environment.SetValue("NODE_USE_ENV_PROXY", "1", RegistryValueKind.String);
             string existing = environment.GetValue(BrowserReadLaunchPolicy.EnvironmentKey, null, RegistryValueOptions.DoNotExpandEnvironmentNames) as string;

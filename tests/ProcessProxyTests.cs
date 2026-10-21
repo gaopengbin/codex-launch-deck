@@ -13,10 +13,10 @@ class Tests
 {
     class Engine:IProxyEngine
     {
-        public List<string> Calls=new List<string>(); public bool FailStart,FailStop,FailRule,FailHelperRule,HangStart;
+        public List<string> Calls=new List<string>(); public bool FailStart,FailStop,FailRule,FailHelperRule,FailCoreRule,HangStart;
         public uint AddHttpProxy(string host,ushort port) { Calls.Add("proxy:"+host+":"+port); return 1; }
         public uint AddDirectLoopbackRule() { Calls.Add("loopback"); return 2; }
-        public uint AddProcess443Rule(string path,uint id) { Calls.Add("target:"+path); return FailRule || (FailHelperRule && path.EndsWith("node_repl.exe"))?0u:3u; }
+        public uint AddProcess443Rule(string path,uint id) { Calls.Add("target:"+path); return FailRule || (FailHelperRule && path.EndsWith("node_repl.exe")) || (FailCoreRule && path.StartsWith(CoreHelperScope.RuntimeRoot,StringComparison.OrdinalIgnoreCase))?0u:3u; }
         public void DeleteRule(uint id) { Calls.Add("delete"+id); }
         public void DeleteProxy(uint id) { Calls.Add("deleteproxy"); }
         public bool Start() { Calls.Add("start"); if(HangStart) new ManualResetEvent(false).WaitOne(); return !FailStart; }
@@ -41,6 +41,13 @@ class Tests
     }
     static int Main(string[] args)
     {
+        if(args.Length==2 && args[0]=="--verify-installed-core") {
+            var installed=Plan(); installed.ExecutablePath=args[1];
+            installed.CoreHelperPaths=CoreHelperScope.Resolve(args[1]);
+            CoreHelperScope.Verify(installed);
+            Console.WriteLine("Verified installed core helpers: "+installed.CoreHelperPaths.Length);
+            return installed.CoreHelperPaths.Length>0?0:7;
+        }
         if(args.Length>0 && args[0]=="--timeout-worker") return BrokerSession.Run(new StringReader(Plan().Serialize()+"\nSTART\n"),Console.Out,p=>p.Validate(),p=>true,()=>new Engine{HangStart=true},100);
         if(args.Length>0 && args[0]=="--controlled-exit-worker") { Console.InputEncoding=Encoding.Unicode; Console.WriteLine("WAITING"); Console.Out.Flush(); using(var controlInput=new StreamReader(Console.OpenStandardInput(),new UTF8Encoding(false),true)) return controlInput.ReadLine()=="EXIT"?0:8; }
         if(args.Length>0 && args[0]=="--delayed-exit-worker") { Thread.Sleep(100); return 0; }
@@ -64,6 +71,19 @@ class Tests
                 }
             }
         }
+        var core=Path.Combine(CoreHelperScope.RuntimeRoot,@"0123456789abcdef\codex.exe");
+        var corePlan=Plan();corePlan.CoreHelperPaths=new[]{core};
+        Check(ProxyPlan.Parse(corePlan.Serialize()).CoreHelperPaths[0]==core,"core plan round trip");
+        Check(corePlan.Matches(core,IPAddress.Parse("203.0.113.1"),443,true),"copied core remote 443 matched");
+        Check(!corePlan.Matches(core,IPAddress.Loopback,10808,true),"core upstream remains direct");
+        Check(!corePlan.Matches(core,IPAddress.Parse("203.0.113.1"),80,true),"core other port excluded");
+        Reject(()=>CoreHelperScope.ValidatePath(core.Replace("codex.exe","other.exe")),"unrelated copied executable rejected");
+        Reject(()=>CoreHelperScope.ValidatePath(core.Replace("0123456789abcdef","not-a-hash")),"non-runtime core directory rejected");
+        Reject(()=>CoreHelperScope.ValidatePath(Path.Combine(Path.GetTempPath(),"codex.exe")),"arbitrary core path rejected");
+        var coreEngine=new Engine();using(var coreSession=new ProxySession(coreEngine)){coreSession.Start(corePlan);Check(coreEngine.Calls.IndexOf("target:"+core)<coreEngine.Calls.IndexOf("start"),"core rule installed before engine start");}
+        Check(coreEngine.Calls.Contains("stop")&&coreEngine.Calls.Contains("deleteproxy"),"core scope session cleans up");
+        var failedCore=new Engine{FailCoreRule=true};Reject(()=>new ProxySession(failedCore).Start(corePlan),"core rule failure rejects session");
+        Check(!failedCore.Calls.Contains("start")&&failedCore.Calls.Contains("deleteproxy"),"core rule failure rolls back before start");
         var controller=new ProxyController(); Check(controller.State==ProxyState.Off,"initial off"); Reject(()=>controller.Prepare(),"uninstalled bundle rejected before UAC"); Check(controller.State==ProxyState.WaitingApproval,"waiting approval state");
         var plan=Plan();Check(ProxyPlan.Parse(plan.Serialize()).ExecutablePath==plan.ExecutablePath,"serialization");
         string helper=Path.Combine(BrowserHelperScope.RuntimeRoot,@"0123456789abcdef\bin\node_repl.exe");

@@ -25,16 +25,4 @@ try {
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 } finally { Remove-Item -LiteralPath $trustedClientSource -ErrorAction SilentlyContinue }
 
-$themeSource = Join-Path $projectDir 'themes\miku-future-beats-1.2.3.codedrobe-theme'
-if (Test-Path -LiteralPath $themeSource) {
-    $themeOutput = Join-Path $outputDir 'themes'
-    if (Test-Path -LiteralPath $themeOutput) {
-        $resolvedTheme=[IO.Path]::GetFullPath($themeOutput)
-        if ($resolvedTheme -ne ([IO.Path]::GetFullPath($outputDir).TrimEnd('\')+'\themes')) { throw 'Unsafe theme output path.' }
-        Remove-Item -LiteralPath $resolvedTheme -Recurse -Force
-    }
-    New-Item -ItemType Directory -Path $themeOutput -Force | Out-Null
-    Copy-Item -LiteralPath $themeSource -Destination $themeOutput -Force
-}
-
 Write-Host "Built: $outputDir\ChatGPTProxyLauncher.exe"

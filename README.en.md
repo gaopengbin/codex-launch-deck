@@ -30,11 +30,11 @@
   <img src="docs/images/theme-gallery.png" alt="Codex Proxy Launch Deck theme gallery" width="92%">
 </p>
 
-## v2.4.1 portable browser fix
+## v2.4.2 portable enhanced-proxy edition
 
-Download the single [LaunchDeck.exe](https://github.com/gaopengbin/codex-launch-deck/releases/download/v2.4.1-portable/LaunchDeck.exe). No installation wizard is needed. Keep **Enhanced proxy** enabled for the browser helper network fix; preparing protected components and enabling the driver still require Windows approval.
+Download [LaunchDeck.exe](https://github.com/gaopengbin/codex-launch-deck/releases/download/v2.4.2-portable/LaunchDeck.exe). This single EXE always uses enhanced proxy, with no mode checkbox or theme features. It fixes WebSocket proxy propagation, copied Codex core coverage, activation handoff errors and accidental proxy shutdown when closing the launcher window. Browser repair and tray operation remain available.
 
-This release preserves browser compatibility across application restarts and covers the verified official browser helper with exact process-path rules. Restart testing reduced ordinary reading from about 21 seconds to 0.301 seconds and screenshots to 0.044 seconds. It does not change the system proxy, DNS or FlClash. See [release notes](docs/releases/v2.4.1-portable.md) and [portable usage](docs/portable.md).
+No installation wizard is required. Windows authorization is still needed for protected components and driver use. See [release notes](docs/releases/v2.4.2-portable.md) and [portable usage](docs/portable.md). Theme workbench features described below apply to the full application and historical editions, not this portable edition.
 
 ## Three jobs, one launch deck
 

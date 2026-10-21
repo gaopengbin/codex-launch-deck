@@ -94,6 +94,7 @@ namespace LaunchDeck.ProcessProxy
             RejectReparseAncestors(plan.ExecutablePath);
             if(!File.Exists(plan.ExecutablePath)) throw new InvalidOperationException("Package executable is missing.");
             BrowserHelperScope.Verify(plan);
+            CoreHelperScope.Verify(plan);
         }
         internal static void VerifyPeer(uint pid, string sid, string expectedHash)
         {

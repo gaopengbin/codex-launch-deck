@@ -2,12 +2,15 @@
 
 Double-click `LaunchDeck.exe`. No installation wizard, shortcut creation,
 uninstaller, autostart, or changes to the system proxy are needed. The single
-EXE includes the packaged-app activation helper, themes, native components,
+EXE includes the packaged-app activation helper, native components,
 licenses and corresponding native sources. It validates its embedded file
 checksums before extracting into the current user's local cache. Ordinary
-proxy launch runs as the normal user and needs no administrator approval.
+launcher UI runs as the normal user.
 
-Enhanced proxy is optional. It additionally covers the client's native Node
+This portable edition always uses enhanced proxy; no mode checkbox or basic
+proxy branch is shown. It has no themes, theme store, theme restore action,
+CodeDrobe invocation or Node.js/npx requirement. Enter the proxy host and port,
+then choose **Launch ChatGPT / Codex**. Enhanced proxy covers the client's native
 WebSockets and the copied Codex `node_repl.exe` browser helper's remote TCP 443.
 Helper rules use full paths under the current user's Codex runtime directory;
 each helper must match the SHA256 of the registered package's original helper.
@@ -15,7 +18,7 @@ Other Node programs and local connections are excluded. The first use requests n
 copy this version's embedded runtime to an immutable protected directory under
 `C:\Program Files\LaunchDeckProcessProxy`. This is a persistent component cache;
 the enhanced mode is not zero-footprint. It does not require running a separate
-installer. The launcher preserves the selected proxy and theme and continues
+installer. The launcher preserves the selected proxy and language and continues
 the same launch from the protected runtime as the normal user. Each enhanced
 session separately requests driver/traffic approval before loading the driver.
 
@@ -47,15 +50,48 @@ The browser helper performs network requests before reading page content.
 On the diagnosed system these requests were connecting directly and waiting
 about 21 seconds. Enhanced mode now routes the verified helper through the
 selected proxy as well. This does not disable or bypass any browser checks.
-Basic mode alone does not supply this additional process rule. No vendor
+No vendor
 configuration watcher or vendor JavaScript patch is used.
 
-The **Check / repair browser** dialog retains the earlier, manual configuration
-repair and rollback tools. Automatic startup no longer rewrites that file or
-waits ten seconds: live validation showed the application could overwrite the
-flag later. Restart the client through this build to inherit the launch policy.
+The **Check / repair browser** dialog retains the manual configuration repair
+and rollback tools. The launcher does not rewrite the TinySky flag: live
+validation showed the application could overwrite that flag later. Restart
+the client through this build to inherit the launch policy.
+
+When enhanced proxy is ready, closing the launcher window now hides it in
+the notification area instead of stopping the proxy. Double-click its icon
+to reopen it. To stop the session, choose **Exit and stop enhanced proxy**
+from the icon's menu. Windows shutdown still cleans
+up the session. No startup service or scheduled task is installed.
+
+After a proxy launch, while the launcher remains running, it also checks the
+authoritatively installed browser tool configuration every two seconds. Only
+missing `HTTPS_PROXY` and `NO_PROXY` forwarding names are added; proxy values,
+permissions and unrelated configuration bytes are preserved. Each repair uses
+a backup, identity/path checks and concurrent-write protection. Healthy
+configuration is not rewritten. This handles application regeneration after
+startup and updates; it does not change the environment of already-running
+tool processes. Explicitly exiting the launcher stops reconciliation. A stale or missing
+runtime still requires reconnecting tools or a normal client restart.
 The launcher does not modify app ASAR or vendor JS code. New app versions still
 need their environment-forwarding and fallback behavior verified.
+
+## Model and WebSocket proxy coverage
+
+The launch environment also sets `WS_PROXY` and `WSS_PROXY` to the selected
+HTTP proxy. Their previous registry values and types are backed up and
+restored with the other launch variables. The launcher does not replace the
+built-in model provider or change its retry count.
+
+Enhanced mode additionally routes copied Codex background executables under
+`%LOCALAPPDATA%\OpenAI\Codex\bin\<16-hex-digits>\codex.exe`. Each included
+file must match the current registered package's `app\resources\codex.exe`
+hash; reparse paths and unrelated executables are rejected. The protected
+host verifies them again before approval. Approval shows the number of core
+helpers, and diagnostics record that count. Rules only cover remote TCP
+443; local proxy and application connections remain direct. If a new runtime
+is first copied after activation, its native rule requires a subsequent
+launch; explicit WebSocket proxy variables still apply to that launch.
 
 `--verify-payload` checks embedded resources without extraction, driver loading
 or starting ChatGPT. Build and isolated tests do not establish authenticated

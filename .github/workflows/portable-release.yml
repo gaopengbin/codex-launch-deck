@@ -31,6 +31,7 @@ jobs:
         run: |
           .\tests\test-cua-forwarding.ps1
           .\tests\test-browser-launch-policy.ps1
+          .\tests\test-activation-handoff.ps1
       - name: Build enhanced components
         shell: powershell
         run: .\scripts\build-process-proxy.ps1
@@ -40,6 +41,7 @@ jobs:
           .\scripts\build-portable.ps1 -OutputDirectory output\portable-ci -NativePackage output\enhanced\package -NativeArtifactsSource output\enhanced\NativeArtifacts.generated.cs -Revision portable-ci
           $p = Start-Process -FilePath output\portable-ci\LaunchDeck.exe -ArgumentList '--verify-payload' -Wait -PassThru
           if ($p.ExitCode -ne 0) { throw 'Portable payload verification failed.' }
+          .\tests\test-launcher-lifetime.ps1 -LauncherExecutable output\portable-ci\payload\ChatGPTProxyLauncher.exe
       - uses: actions/upload-artifact@v4
         with:
           name: LaunchDeck-portable-win-x64

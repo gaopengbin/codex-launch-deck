@@ -11,8 +11,6 @@ namespace ChatGPTProxyLauncherLite
     {
         public string Host { get; set; }
         public int Port { get; set; }
-        public bool Theme { get; set; }
-        public string ThemeSlug { get; set; }
         public bool English { get; set; }
     }
 
@@ -29,7 +27,7 @@ namespace ChatGPTProxyLauncherLite
                 throw new ArgumentException("Invalid portable launch settings.");
         }
 
-        // The ordinary UI runs without elevation. Only the optional native mode
+        // The ordinary UI runs without elevation. Enhanced proxy mode
         // needs an immutable runtime, and its existing protected-peer checks stay intact.
         internal static bool Handoff(PortableResume settings)
         {

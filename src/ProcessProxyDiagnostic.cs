@@ -54,7 +54,7 @@ namespace LaunchDeck.ProcessProxy
             try { plan.Validate();
                 string package=Path.GetFileName(Path.GetDirectoryName(Path.GetDirectoryName(plan.ExecutablePath)));
                 if(!Regex.IsMatch(package,@"^OpenAI\.(Codex|ChatGPT-Desktop)_[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+_(x64|x86|arm64)__[a-z0-9]+$",RegexOptions.IgnoreCase)) {WriteFailed=true;return;}
-                WriteBounded(DateTime.UtcNow.ToString("o")+" plan="+new JavaScriptSerializer().Serialize(new { targetExe=plan.ExecutablePath,upstreamHost=plan.ProxyHost,upstreamPort=plan.ProxyPort,scope=ProxyPlan.Scope })); } catch { WriteFailed=true; }
+                WriteBounded(DateTime.UtcNow.ToString("o")+" plan="+new JavaScriptSerializer().Serialize(new { targetExe=plan.ExecutablePath,upstreamHost=plan.ProxyHost,upstreamPort=plan.ProxyPort,scope=ProxyPlan.Scope,browserHelperCount=(plan.BrowserHelperPaths??new string[0]).Length,coreHelperCount=(plan.CoreHelperPaths??new string[0]).Length })); } catch { WriteFailed=true; }
         }
         internal void RecordRules(uint proxy,uint direct,uint target)
         { try {WriteBounded(DateTime.UtcNow.ToString("o")+" rules proxyId="+proxy+" loopbackRule="+direct+" targetRule="+target);}catch{WriteFailed=true;} }

@@ -14,6 +14,7 @@ namespace LaunchDeck.ProcessProxy
         public const string Scope = "chatgpt-process-tcp-443";
         public string ExecutablePath { get; set; }
         public string[] BrowserHelperPaths { get; set; }
+        public string[] CoreHelperPaths { get; set; }
         public string ProxyHost { get; set; }
         public int ProxyPort { get; set; }
         public bool Process443Approved { get; set; }
@@ -38,6 +39,10 @@ namespace LaunchDeck.ProcessProxy
             if (BrowserHelperPaths != null) {
                 if (BrowserHelperPaths.Length > 8) throw new ArgumentException("Too many browser helpers.");
                 foreach (string helper in BrowserHelperPaths) BrowserHelperScope.ValidatePath(helper);
+            }
+            if (CoreHelperPaths != null) {
+                if (CoreHelperPaths.Length > 8) throw new ArgumentException("Too many Codex core helpers.");
+                foreach (string helper in CoreHelperPaths) CoreHelperScope.ValidatePath(helper);
             }
             IPAddress upstream;
             if (!IPAddress.TryParse(ProxyHost, out upstream) || !IsLoopback(upstream)
@@ -71,7 +76,8 @@ namespace LaunchDeck.ProcessProxy
             return tcp && port == 443 && destination != null && !IsLoopback(destination)
                 && !destination.Equals(IPAddress.Any) && !destination.Equals(IPAddress.IPv6Any)
                 && (ExecutablePath.Equals(executable, StringComparison.OrdinalIgnoreCase)
-                    || (BrowserHelperPaths ?? new string[0]).Contains(executable, StringComparer.OrdinalIgnoreCase));
+                    || (BrowserHelperPaths ?? new string[0]).Contains(executable, StringComparer.OrdinalIgnoreCase)
+                    || (CoreHelperPaths ?? new string[0]).Contains(executable, StringComparer.OrdinalIgnoreCase));
         }
     }
 
@@ -122,6 +128,54 @@ namespace LaunchDeck.ProcessProxy
         }
     }
 
+    internal static class CoreHelperScope
+    {
+        internal static string RuntimeRoot { get { return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "OpenAI", "Codex", "bin"); } }
+        internal static void ValidatePath(string path)
+        {
+            if(String.IsNullOrEmpty(path) || path.Length >= 1024 || path.Any(c=>c>127)
+                || path.IndexOfAny(new[] {'*','?',';',',','\r','\n','\0'})>=0)
+                throw new ArgumentException("Invalid Codex core helper path.");
+            string full=Path.GetFullPath(path), root=Path.GetFullPath(RuntimeRoot)+"\\";
+            string relative=full.StartsWith(root,StringComparison.OrdinalIgnoreCase)?full.Substring(root.Length):"";
+            string[] parts=relative.Split('\\');
+            if(!full.Equals(path,StringComparison.OrdinalIgnoreCase) || parts.Length!=2
+                || parts[0].Length!=16 || !parts[0].All(Uri.IsHexDigit) || parts[1]!="codex.exe")
+                throw new ArgumentException("Only the copied Codex core helper is allowed.");
+        }
+        internal static string Source(string executable) { return Path.Combine(Path.GetDirectoryName(executable),"resources","codex.exe"); }
+        internal static string[] Resolve(string executable)
+        {
+            string source=Source(executable);
+            if(!File.Exists(source) || !Directory.Exists(RuntimeRoot)) return new string[0];
+            ProxySecurity.RejectReparseAncestors(source);
+            string expected=ProxySecurity.HashFile(source);
+            var paths=new List<string>();
+            foreach(string directory in Directory.GetDirectories(RuntimeRoot)) {
+                string candidate=Path.Combine(directory,"codex.exe");
+                if(!File.Exists(candidate)) continue;
+                ValidatePath(candidate);
+                ProxySecurity.RejectReparseAncestors(candidate);
+                if(new FileInfo(candidate).Length!=new FileInfo(source).Length) continue;
+                if(ProxySecurity.HashFile(candidate)==expected) paths.Add(candidate);
+            }
+            if(paths.Count>8) throw new InvalidOperationException("Too many matching Codex cores.");
+            return paths.ToArray();
+        }
+        internal static void Verify(ProxyPlan plan)
+        {
+            if(plan.CoreHelperPaths==null || plan.CoreHelperPaths.Length==0) return;
+            string source=Source(plan.ExecutablePath);
+            ProxySecurity.RejectReparseAncestors(source);
+            string expected=ProxySecurity.HashFile(source);
+            foreach(string path in plan.CoreHelperPaths) {
+                ValidatePath(path);
+                ProxySecurity.RejectReparseAncestors(path);
+                ProxySecurity.VerifyHash(path,expected);
+            }
+        }
+    }
+
     internal interface IProxyEngine : IDisposable
     {
         uint AddHttpProxy(string host, ushort port);
@@ -161,6 +215,11 @@ namespace LaunchDeck.ProcessProxy
                 foreach(string helper in plan.BrowserHelperPaths ?? new string[0]) {
                     uint rule=engine.AddProcess443Rule(helper,proxy);
                     if(rule==0) throw new InvalidOperationException("Browser helper rule failed.");
+                    rules.Add(rule);
+                }
+                foreach(string helper in plan.CoreHelperPaths ?? new string[0]) {
+                    uint rule=engine.AddProcess443Rule(helper,proxy);
+                    if(rule==0) throw new InvalidOperationException("Codex core helper rule failed.");
                     rules.Add(rule);
                 }
                 engineMayBeRunning = true; // Even a partial Start must be rolled back.
