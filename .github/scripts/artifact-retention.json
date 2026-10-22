@@ -1,1 +1,6 @@
-{"repository":"gaopengbin/codex-launch-deck"}
+{
+  "repository": "gaopengbin/codex-launch-deck",
+  "defaultBranch": "main",
+  "cacheBudgetBytes": 1073741824,
+  "artifactBudgetBytes": 134217728
+}
