@@ -30,13 +30,13 @@
   <img src="docs/images/theme-gallery.png" alt="Codex Proxy Launch Deck 主题商店" width="92%">
 </p>
 
-## v2.4.2 免安装增强代理版
+## v2.4.3 免安装增强代理版
 
-下载 [LaunchDeck.exe](https://github.com/gaopengbin/codex-launch-deck/releases/download/v2.4.2-portable/LaunchDeck.exe)，双击运行。便携版专注增强代理，移除主题相关功能和内置主题包，默认启用增强代理，无需额外勾选。
+下载 [LaunchDeck.exe](https://github.com/gaopengbin/codex-launch-deck/releases/download/v2.4.3-portable/LaunchDeck.exe)，双击运行。便携版专注增强代理，移除主题相关功能和内置主题包，默认启用增强代理，无需额外勾选。
 
-本次修复 WebSocket 代理设置遗漏、新版 Codex 后台程序未覆盖、启动转交进程退出误报，以及关闭启动器窗口切断增强代理的问题；保留浏览器修复，关闭窗口收至托盘继续运行。
+本次修复 WebSocket 代理设置遗漏、新版 Codex 后台程序未覆盖、启动转交进程退出误报，以及关闭启动器窗口切断增强代理的问题；另修复启动等待导致的界面卡顿，新增阶段和心跳诊断日志。保留浏览器修复，关闭窗口收至托盘继续运行。
 
-无需安装向导；首次准备受保护组件及启动驱动仍需要 Windows 授权。不修改系统代理、DNS 或 FlClash。详见 [修复说明](docs/releases/v2.4.2-portable.md) 和 [免安装使用说明](docs/portable.md)。下方主题工作台介绍适用于完整版和历史版本，当前免安装增强代理版不包含主题功能。
+无需安装向导；首次准备受保护组件及启动驱动仍需要 Windows 授权。不修改系统代理、DNS 或 FlClash。详见 [修复说明](docs/releases/v2.4.3-portable.md) 和 [免安装使用说明](docs/portable.md)。下方主题工作台介绍适用于完整版和历史版本，当前免安装增强代理版不包含主题功能。
 
 ## 它解决什么
 

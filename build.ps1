@@ -14,7 +14,7 @@ $windowsDir = Split-Path -Parent ([Environment]::SystemDirectory)
     /win32icon:"$projectDir\assets\app-icon.ico" `
     /out:"$outputDir\ChatGPTProxyLauncher.exe" `
     /reference:System.dll /reference:System.Core.dll /reference:System.Drawing.dll /reference:System.Windows.Forms.dll /reference:System.Web.Extensions.dll `
-    "$projectDir\src\Program.cs" "$projectDir\src\PortableRuntime.cs" "$projectDir\src\CuaProxyForwardingMaintenance.cs" "$projectDir\src\CuaProxyMaintenanceDialog.cs" "$projectDir\src\ProcessProxy.cs" "$projectDir\src\ProcessProxyController.cs" "$projectDir\src\ProcessProxySecurity.cs" $artifactsSource "$projectDir\src\ProcessProxyDiagnostic.cs"
+    "$projectDir\src\Program.cs" "$projectDir\src\LauncherDiagnostics.cs" "$projectDir\src\PortableRuntime.cs" "$projectDir\src\CuaProxyForwardingMaintenance.cs" "$projectDir\src\CuaProxyMaintenanceDialog.cs" "$projectDir\src\ProcessProxy.cs" "$projectDir\src\ProcessProxyController.cs" "$projectDir\src\ProcessProxySecurity.cs" $artifactsSource "$projectDir\src\ProcessProxyDiagnostic.cs"
 
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 $trustedClientHash = (Get-FileHash -LiteralPath "$outputDir\ChatGPTProxyLauncher.exe" -Algorithm SHA256).Hash

@@ -118,9 +118,16 @@ internal static class PackagedChatGPTLauncher
         };
         using (Process process = Process.Start(start))
         {
-            string output = process.StandardOutput.ReadToEnd().Trim();
-            string errors = process.StandardError.ReadToEnd();
-            process.WaitForExit();
+            var outputRead=process.StandardOutput.ReadToEndAsync();
+            var errorRead=process.StandardError.ReadToEndAsync();
+            if(!process.WaitForExit(15000)) {
+                // Only this owned, read-only package lookup is stopped. No client
+                // process or proxy environment has been changed at this point.
+                try {process.Kill();process.WaitForExit(2000);} catch { }
+                throw new TimeoutException("Windows package discovery did not finish within fifteen seconds. The client was not started.");
+            }
+            string output = outputRead.GetAwaiter().GetResult().Trim();
+            string errors = errorRead.GetAwaiter().GetResult();
             if (process.ExitCode != 0)
                 throw new InvalidOperationException("Cannot query ChatGPT package: " + errors.Trim());
             if (output.Length == 0) return null;

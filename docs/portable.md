@@ -35,6 +35,19 @@ HTTP CONNECT proxy instead of a possibly poisoned local DNS address. The
 launcher does not modify the client ASAR, system DNS, FlClash, TUN or VPN.
 It activates the registered Windows package to preserve package identity.
 
+## Startup responsiveness and diagnostics
+
+Slow launch checks and activation-helper waits run away from the UI thread.
+The helper drains standard output and error concurrently. Its Windows package
+lookup times out after fifteen seconds without terminating the client.
+
+Numeric launch diagnostics are stored under
+`%LOCALAPPDATA%\LaunchDeck\Diagnostics\launcher-*.log`: startup stage, UI
+heartbeat delay, working/private memory and handle count. Each file is capped
+at 1 MiB. Existing logs are preserved; after eight retained session files,
+additional session files are not created. No request content, credentials or
+proxy destinations are recorded. These logs do not enable v2rayN logging.
+
 ## Browser read compatibility
 
 This build passes `BROWSER_USE_DISABLE_API_MEMBERS=Tab.ax` with the registered

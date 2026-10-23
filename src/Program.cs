@@ -24,6 +24,7 @@ namespace ChatGPTProxyLauncherLite
     internal sealed class LauncherForm : Form
     {
         private readonly LaunchDeck.ProcessProxy.ProxyController processProxy = new LaunchDeck.ProcessProxy.ProxyController();
+        private readonly LauncherDiagnostics diagnostics;
         private CuaProxyForwardingWatch browserForwardingWatch;
         private string lastBrowserForwardingError;
         private readonly System.Windows.Forms.Timer processProxyHealth = new System.Windows.Forms.Timer { Interval = 1000 };
@@ -45,8 +46,10 @@ namespace ChatGPTProxyLauncherLite
         private bool trayNoticeShown;
 
 
-        public LauncherForm()
+        public LauncherForm() : this(new LauncherDiagnostics()) { }
+        internal LauncherForm(LauncherDiagnostics trace)
         {
+            diagnostics=trace;
             Text = "ChatGPT Proxy Launcher";
             Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath);
             sessionTray.Icon = Icon;
@@ -163,6 +166,7 @@ namespace ChatGPTProxyLauncherLite
             };
             body.Controls.Add(browserProxyButton);
             processProxyHealth.Tick += delegate {
+                diagnostics.Heartbeat();
                 try { processProxy.PollHealth(); }
                 catch (Exception ex) { SetStatus(ex.Message, false); return; }
                 string error=browserForwardingWatch==null?null:browserForwardingWatch.LastError;
@@ -193,7 +197,7 @@ namespace ChatGPTProxyLauncherLite
                 if(browserForwardingWatch!=null) browserForwardingWatch.Dispose();
                 try { processProxy.Dispose(); } catch (Exception ex) { MessageBox.Show(ex.Message); }
             };
-            FormClosed += delegate { sessionTray.Dispose(); trayMenu.Dispose(); };
+            FormClosed += delegate { diagnostics.Dispose(); sessionTray.Dispose(); trayMenu.Dispose(); };
             Controls.Add(body);
             Controls.Add(header);
             AcceptButton = launchButton;
@@ -242,20 +246,24 @@ namespace ChatGPTProxyLauncherLite
             browserProxyButton.Enabled = false;
             hostBox.Enabled = false; portBox.Enabled = false;
             UseWaitCursor = true;
+            Exception launchFailure=null;
             try
             {
+              try {
                 string host = hostBox.Text.Trim();
                 int port = (int)portBox.Value;
+                diagnostics.Stage("checking-proxy");
                 if (host.Length == 0) throw new Exception(L("请输入代理主机。", "Enter a proxy host."));
                 SetStatus(L("正在检查代理…", "Checking proxy…"), null);
 
                 bool reachable = await Task.Run(() => CanConnect(host, port));
                 if (!reachable) throw new Exception(String.Format(L("无法连接代理 {0}:{1}。", "Cannot reach proxy {0}:{1}."), host, port));
-                if (IsDesktopAppRunning()) throw new Exception(L("ChatGPT 已在运行，请完全退出后再试。", "ChatGPT is already running. Fully quit it and try again."));
+                if (await Task.Run(()=>IsDesktopAppRunning())) throw new Exception(L("ChatGPT 已在运行，请完全退出后再试。", "ChatGPT is already running. Fully quit it and try again."));
 
                 string proxyUrl = String.Format("http://{0}:{1}", host, port);
                 {
                     SetStatus(L("正在准备增强代理组件…", "Preparing enhanced proxy components…"), null);
+                    diagnostics.Stage("preparing-runtime");
                     var resumeSettings = new PortableResume {
                         Host=host, Port=port, English=english
                     };
@@ -263,7 +271,8 @@ namespace ChatGPTProxyLauncherLite
                     if (handedOff) { Close(); return; }
                     // Verify the protected, pinned bundle before requesting administrator approval.
                     SetStatus(L("增强代理：等待引擎与驱动授权", "Enhanced proxy: waiting for engine and driver approval"), null);
-                    processProxy.Prepare();
+                    diagnostics.Stage("preparing-proxy-host");
+                    await Task.Run(()=>processProxy.Prepare());
 
                     await Task.Run(() => {
                         string executable=LaunchDeck.ProcessProxy.ProxyController.ResolveExecutable();
@@ -276,24 +285,31 @@ namespace ChatGPTProxyLauncherLite
                     });
                     SetStatus(L("增强代理已就绪", "Enhanced proxy ready"), true);
                 }
-                if(browserForwardingWatch==null) browserForwardingWatch=CuaProxyForwardingWatch.CreateDefault();
+                diagnostics.Stage("checking-browser-forwarding");
+                if(browserForwardingWatch==null) browserForwardingWatch=await Task.Run(()=>CuaProxyForwardingWatch.CreateDefault());
                 {
                     SetStatus(L("正在查找 ChatGPT…", "Finding ChatGPT…"), null);
-                    StartPackagedChatGPT(proxyUrl, null, processProxy.State == LaunchDeck.ProcessProxy.ProxyState.Ready ? processProxy.TargetExecutable : null);
+                    diagnostics.Stage("activating-package");
+                    await StartPackagedChatGPT(proxyUrl, null, processProxy.State == LaunchDeck.ProcessProxy.ProxyState.Ready ? processProxy.TargetExecutable : null);
+                    diagnostics.Stage("running");
                     SetStatus(L("已通过 " + proxyUrl + " 启动 ChatGPT", "ChatGPT started through " + proxyUrl), true);
                 }
             }
-            catch (Exception ex) {
+              catch (Exception error) { launchFailure=error; }
+              if(launchFailure!=null) {
+                var ex=launchFailure;
+                diagnostics.Stage("launch-error");
                 // Keep an approved session for its live client, including when
                 // Launch is pressed again while that client is already running.
                 bool keepProxy=false;
-                try { keepProxy=processProxy.State==LaunchDeck.ProcessProxy.ProxyState.Ready && IsDesktopAppRunning(); } catch { }
+                try { keepProxy=processProxy.State==LaunchDeck.ProcessProxy.ProxyState.Ready && await Task.Run(()=>IsDesktopAppRunning()); } catch { }
                 if(keepProxy) SetStatus(L("客户端已启动，增强代理保持运行；后续步骤失败：", "Client started; enhanced proxy remains active. A later step failed: ")+ex.Message,false);
                 else {
                     string cleanup="";
-                    try { processProxy.Dispose(); } catch(Exception stopError) { cleanup=" "+stopError.Message; }
+                    try { await Task.Run(()=>processProxy.Dispose()); } catch(Exception stopError) { cleanup=" "+stopError.Message; }
                     SetStatus(ex.Message+cleanup,ex is OperationCanceledException?(bool?)null:false);
                 }
+              }
             }
             finally { UseWaitCursor = false; browserProxyButton.Enabled = true; launchButton.Enabled = true; hostBox.Enabled = true; portBox.Enabled = true; }
         }
@@ -347,7 +363,7 @@ namespace ChatGPTProxyLauncherLite
             finally { process.Dispose(); }
         }
 
-        private static void StartPackagedChatGPT(string proxyUrl, int? cdpPort, string expectedExecutable)
+        private static async Task StartPackagedChatGPT(string proxyUrl, int? cdpPort, string expectedExecutable)
         {
             string helper = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "PackagedChatGPTLauncher.exe");
             if (!File.Exists(helper))
@@ -362,9 +378,11 @@ namespace ChatGPTProxyLauncherLite
             };
             using (var process = Process.Start(info))
             {
-                string output = process.StandardOutput.ReadToEnd().Trim();
-                string error = process.StandardError.ReadToEnd().Trim();
-                process.WaitForExit();
+                var outputRead = process.StandardOutput.ReadToEndAsync();
+                var errorRead = process.StandardError.ReadToEndAsync();
+                await Task.Run(()=>process.WaitForExit());
+                string output = (await outputRead).Trim();
+                string error = (await errorRead).Trim();
                 if (process.ExitCode != 0 || output.Length == 0)
                     throw new InvalidOperationException(error.Length == 0 ? "ChatGPT package activation failed." : error);
             }
