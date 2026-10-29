@@ -30,11 +30,11 @@
   <img src="docs/images/theme-gallery.png" alt="Codex Proxy Launch Deck theme gallery" width="92%">
 </p>
 
-## v2.4.3 portable enhanced-proxy edition
+## v2.4.4 portable browser compatibility fix
 
-Download [LaunchDeck.exe](https://github.com/gaopengbin/codex-launch-deck/releases/download/v2.4.3-portable/LaunchDeck.exe). This single EXE always uses enhanced proxy, with no mode checkbox or theme features. It fixes WebSocket proxy propagation, copied Codex core coverage, activation handoff errors and accidental proxy shutdown when closing the launcher window. Launch waits now run asynchronously and retain UI-heartbeat diagnostics. Browser repair and tray operation remain available.
+Download [LaunchDeck.exe](https://github.com/gaopengbin/codex-launch-deck/releases/download/v2.4.4-portable/LaunchDeck.exe). This release fixes `Unexpected CUA launch entry` for the updated browser permission-guard import. The guard, authorization variables and launch arguments are preserved; only missing proxy forwarding names are added.
 
-No installation wizard is required. Windows authorization is still needed for protected components and driver use. See [release notes](docs/releases/v2.4.3-portable.md) and [portable usage](docs/portable.md). Theme workbench features described below apply to the full application and historical editions, not this portable edition.
+The single EXE uses enhanced proxy by default, with no theme features or mode checkbox. Browser repair, tray operation and startup diagnostics remain available. Windows authorization is still required for protected components and driver use. See [release notes](docs/releases/v2.4.4-portable.md) and [portable usage](docs/portable.md). Theme features below apply to the full application and historical editions.
 
 ## Three jobs, one launch deck
 

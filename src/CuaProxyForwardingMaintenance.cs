@@ -156,7 +156,23 @@ namespace ChatGPTProxyLauncherLite
             if (System.IO.Path.GetFileName(command) != "node.exe" || System.IO.Path.GetFileName(bin) != "bin" || !System.IO.Path.GetDirectoryName(System.IO.Path.GetDirectoryName(bin)).Equals(runtimeRoot, StringComparison.OrdinalIgnoreCase)) throw new IOException("Unexpected CUA node runtime.");
             var args = server["args"] as object[];
             string script = System.IO.Path.Combine(bin, "node_modules", "@oai", "cua-repl", "bin", "cua-repl.mjs"); SafePath(script, runtimeRoot);
-            if (args == null || args.Length != 1 || !(args[0] is string) || !Canonical((string)args[0]).Equals(script, StringComparison.OrdinalIgnoreCase) || !File.Exists(command) || !File.Exists(script)) throw new IOException("Unexpected CUA launch entry.");
+            string guard=System.IO.Path.Combine(pluginPath,"require-browser-access.mjs"); SafePath(guard,pluginPath);
+            bool guarded=File.Exists(guard);
+            int scriptIndex=0;
+            if(args==null || !args.All(x=>x is string)) throw new IOException("Unexpected CUA launch entry.");
+            if(guarded) {
+                // Updated clients import their permission guard before starting CUA.
+                // Recognize only that exact installed guard; never remove or bypass it.
+                Uri guardUri;
+                if(args.Length!=3 || (string)args[0]!="--import"
+                    || !Uri.TryCreate((string)args[1],UriKind.Absolute,out guardUri)
+                    || !guardUri.IsFile || guardUri.IsUnc || guardUri.Host.Length!=0
+                    || guardUri.Query.Length!=0 || guardUri.Fragment.Length!=0
+                    || !Canonical(guardUri.LocalPath).Equals(guard,StringComparison.OrdinalIgnoreCase))
+                    throw new IOException("Unexpected CUA browser permission guard.");
+                scriptIndex=2;
+            } else if(args.Length!=1) throw new IOException("Unexpected CUA launch entry.");
+            if (!Canonical((string)args[scriptIndex]).Equals(script, StringComparison.OrdinalIgnoreCase) || !File.Exists(command) || !File.Exists(script)) throw new IOException("Unexpected CUA launch entry.");
             var env = Object(server["env"]);
             string repl = Canonical(StringValue(env, "CUA_REPL_NODE_REPL_PATH")); SafePath(repl, runtimeRoot);
             if (!repl.Equals(System.IO.Path.Combine(bin, "node_repl.exe"), StringComparison.OrdinalIgnoreCase) || !File.Exists(repl) || !StringValue(env, "CUA_REPL_ENABLED_SURFACES").Split(',').Contains("browser")) throw new IOException("Unexpected CUA service environment.");

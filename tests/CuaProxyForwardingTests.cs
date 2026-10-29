@@ -33,6 +33,19 @@ class CuaProxyForwardingTests
         }
         internal static void Write(string path, string value) { Directory.CreateDirectory(Path.GetDirectoryName(path)); File.WriteAllText(path, value, new UTF8Encoding(false)); }
         internal void Edit(string from, string to) { File.WriteAllText(Config, File.ReadAllText(Config).Replace(from, to), new UTF8Encoding(false)); }
+        internal string AddGuard()
+        {
+            string guard=Path.Combine(Path.GetDirectoryName(Config),"require-browser-access.mjs");
+            Write(guard,"fixture permission guard; not executed");
+            var serializer=new JavaScriptSerializer();
+            var root=(Dictionary<string,object>)serializer.DeserializeObject(File.ReadAllText(Config));
+            var servers=(Dictionary<string,object>)root["mcpServers"];
+            var server=(Dictionary<string,object>)servers["cua_repl"];
+            var legacy=(object[])server["args"];
+            server["args"]=new object[]{"--import",new Uri(guard).AbsoluteUri,legacy[0]};
+            Write(Config,serializer.Serialize(root));
+            return guard;
+        }
     }
     static int Main(string[] args)
     {
@@ -40,6 +53,18 @@ class CuaProxyForwardingTests
         try
         {
             var f = new Fixture(root); byte[] original = File.ReadAllBytes(f.Config); var first = f.Service.Check();
+            var guarded=new Fixture(root); string guardPath=guarded.AddGuard();
+            byte[] guardBytes=File.ReadAllBytes(guardPath), guardedOriginal=File.ReadAllBytes(guarded.Config);
+            var guardedCheck=guarded.Service.Check(); Assert(guardedCheck.Missing.Length==2,"guarded launch entry accepted");
+            var guardedRepair=guarded.Service.Repair(guardedCheck);
+            Assert(File.ReadAllText(guarded.Config)==Encoding.UTF8.GetString(guardedOriginal).Replace("[\"CODEX_WINDOWS_REGISTERED_CORE\",\"KEEP\"]","[\"CODEX_WINDOWS_REGISTERED_CORE\",\"KEEP\",\"HTTPS_PROXY\",\"NO_PROXY\"]"),"guard and unrelated configuration preserved byte-exact");
+            Assert(guardBytes.SequenceEqual(File.ReadAllBytes(guardPath)),"permission guard file not changed");
+            guarded.Service.Rollback(guardedRepair.RecordPath); Assert(guardedOriginal.SequenceEqual(File.ReadAllBytes(guarded.Config)),"guarded entry rollback exact");
+            guarded.Edit("--import","--require"); Reject(()=>guarded.Service.Check(),"unexpected guard flag refused");
+            guarded=new Fixture(root); guarded.AddGuard(); guarded.Edit("require-browser-access.mjs","different-guard.mjs"); Reject(()=>guarded.Service.Check(),"substituted permission guard refused");
+            guarded=new Fixture(root); guarded.AddGuard(); guarded.Edit("file:///","https://"); Reject(()=>guarded.Service.Check(),"remote permission import refused");
+            guarded=new Fixture(root); guardPath=guarded.AddGuard(); File.Delete(guardPath); Reject(()=>guarded.Service.Check(),"missing imported guard refused");
+            guarded=new Fixture(root); guardPath=Path.Combine(Path.GetDirectoryName(guarded.Config),"require-browser-access.mjs"); Fixture.Write(guardPath,"guard"); Reject(()=>guarded.Service.Check(),"installed guard cannot be silently omitted");
             Assert(first.Missing.SequenceEqual(new[] { "HTTPS_PROXY", "NO_PROXY" }), "accurate missing list");
             var result = f.Service.Repair(first); var patched = f.Service.Check();
             Assert(result.Changed && patched.Missing.Length == 0, "repair forwards both keys");

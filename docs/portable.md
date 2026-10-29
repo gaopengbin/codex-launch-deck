@@ -50,6 +50,14 @@ proxy destinations are recorded. These logs do not enable v2rayN logging.
 
 ## Browser read compatibility
 
+Updated CUA configurations may import their installed
+`require-browser-access.mjs` before the runtime entry script. The launcher
+recognizes this exact local guarded layout and keeps the import, guard file
+and browser access authorization variables unchanged. Missing, substituted,
+remote or unexpected imports are rejected. Legacy single-script layouts are
+accepted only when no guard file is installed. Forwarding repair still adds
+only missing proxy names and retains a rollback backup.
+
 This build passes `BROWSER_USE_DISABLE_API_MEMBERS=Tab.ax` with the registered
 package's launch environment. Existing user and inherited restrictions are
 merged, not replaced. The activation helper backs up and restores the exact
